@@ -83,10 +83,10 @@ def recruiter_list(request: WSGIRequest) -> HttpResponse:
     counts = {row["status"]: row["n"] for row in qs.values("status").annotate(n=Count("id"))}
     counts["all"] = sum(counts.get(s, 0) for s in ("new", "accepted", "rejected"))
     filters = [
-        {"key": "all", "label": _("Totaal"), "count": counts.get("all", 0)},
-        {"key": "new", "label": _("Nieuw"), "count": counts.get("new", 0)},
-        {"key": "accepted", "label": _("Aangenomen"), "count": counts.get("accepted", 0)},
-        {"key": "rejected", "label": _("Afgewezen"), "count": counts.get("rejected", 0)},
+        {"key": "new", "label": _("Nieuw"), "count": counts.get("new", 0), "color": "warning"},
+        {"key": "accepted", "label": _("Aangenomen"), "count": counts.get("accepted", 0), "color": "success"},
+        {"key": "rejected", "label": _("Afgewezen"), "count": counts.get("rejected", 0), "color": "danger"},
+        {"key": "all", "label": _("Totaal"), "count": counts.get("all", 0), "color": "info"},
     ]
     if status in ("new", "accepted", "rejected"):
         qs = qs.filter(status=status)

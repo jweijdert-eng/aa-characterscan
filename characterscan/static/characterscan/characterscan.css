@@ -137,11 +137,45 @@
     border: 1px solid rgba(0, 180, 216, .6); color: #021016; font-weight: 700;
 }
 .cs-app .btn-primary:hover { filter: brightness(1.1); }
-/* Actieve filter-chip (btn-primary klein in de lijst) */
-.cs-app .btn-primary.btn-sm { color: #021016; }
+
+/* Filter-chips per status (Nieuw goud · Aangenomen groen · Afgewezen rood · Totaal neutraal) */
+.cs-app .btn-outline-warning { color: var(--cs-gold); border-color: rgba(240, 192, 64, .5); }
+.cs-app .btn-outline-warning:hover,
+.cs-app .btn-warning { background: rgba(240, 192, 64, .18); border-color: var(--cs-gold); color: var(--cs-gold); }
+.cs-app .btn-danger { background: rgba(224, 85, 85, .18); border-color: var(--cs-red); color: #ff9a9a; }
+.cs-app .btn-info { background: rgba(0, 180, 216, .18); border-color: var(--cs-blue); color: var(--cs-blue); }
+.cs-app .btn-secondary { background: rgba(255, 255, 255, .08); border-color: var(--cs-border); color: var(--cs-text); }
 
 /* Portretten */
 .cs-app img.rounded-circle { border: 1px solid var(--cs-border); box-shadow: 0 0 14px rgba(0, 0, 0, .5); }
+
+/* Corp/alliance-regel op de recruiter-kaart */
+.cs-app .cs-org { display: flex; align-items: center; flex-wrap: wrap; gap: .2rem .35rem; margin-top: .15rem; }
+.cs-app .cs-org-logo { width: 16px; height: 16px; border-radius: 3px; flex-shrink: 0; }
+.cs-app .cs-corp { color: var(--cs-gold); font-weight: 600; }
+.cs-app .cs-alliance { color: var(--cs-blue); font-weight: 600; }
+.cs-app .cs-org-sep { color: var(--cs-dim); }
+
+/* Stat-pilletjes op de recruiter-kaart (sec · leeftijd · wallet · SP) */
+.cs-app .cs-stats { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .45rem; }
+.cs-app .cs-stat {
+    display: inline-flex;
+    align-items: baseline;
+    gap: .3rem;
+    padding: .12rem .5rem;
+    background: rgba(255, 255, 255, .035);
+    border: 1px solid var(--cs-border);
+    border-radius: 6px;
+    font-size: .72rem;
+    line-height: 1.4;
+}
+.cs-app .cs-stat .l { color: #79a6d2; text-transform: uppercase; font-size: .58rem; letter-spacing: .06em; font-weight: 600; }
+.cs-app .cs-stat .v { font-weight: 700; color: var(--cs-text); }
+.cs-app .cs-isk { color: var(--cs-gold); }
+.cs-app .cs-sp { color: var(--cs-blue); }
+.cs-app .text-cs-green { color: var(--cs-green) !important; }
+.cs-app .text-cs-gold { color: var(--cs-gold) !important; }
+.cs-app .text-cs-red { color: var(--cs-red) !important; }
 
 /* Skills: details/summary */
 .cs-app details > summary { cursor: pointer; color: var(--cs-text); }

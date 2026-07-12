@@ -15,6 +15,7 @@ def basic_stats(eve_character):
         "corp_name": p.get("corp_name"),
         "alliance_name": p.get("alliance_name") or "",
         "corp_id": p.get("corp_id"),
+        "alliance_id": p.get("alliance_id"),
         "sec": p.get("sec"),
         "age_years": p.get("age_years"),
         "wallet": p.get("wallet"),
