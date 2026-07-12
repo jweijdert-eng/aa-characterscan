@@ -1,0 +1,157 @@
+/* Character Scan — EVE dark-theme (past bij het Dutch Legions-dashboard).
+   Alles gescoped op .cs-app zodat de rest van Alliance Auth onaangeroerd blijft. */
+
+.cs-app {
+    --cs-bg: #05050e;
+    --cs-surface: #0f0f22;
+    --cs-surface-2: #13132b;
+    --cs-border: #1c1c35;
+    --cs-text: #e1e4f0;
+    --cs-dim: #8a90b0;
+    --cs-blue: #00b4d8;
+    --cs-gold: #f0c040;
+    --cs-green: #3ecf6e;
+    --cs-red: #e05555;
+
+    position: relative;
+    color: var(--cs-text);
+    background:
+        radial-gradient(120% 120% at 15% 0%, rgba(0, 180, 216, .10), transparent 55%),
+        radial-gradient(100% 120% at 90% 100%, rgba(240, 192, 64, .06), transparent 55%),
+        var(--cs-bg);
+    border: 1px solid var(--cs-border);
+    border-radius: 12px;
+    padding: 1.4rem 1.5rem;
+}
+
+.cs-app h1, .cs-app h2, .cs-app h3, .cs-app h4 { color: #fff; letter-spacing: .02em; }
+.cs-app a { color: var(--cs-blue); text-decoration: none; }
+.cs-app a:hover { color: #5fd6f0; }
+.cs-app .text-muted { color: var(--cs-dim) !important; }
+.cs-app .text-body { color: var(--cs-text) !important; }
+.cs-app hr { border-color: var(--cs-border); }
+
+/* Kaarten */
+.cs-app .card {
+    background: linear-gradient(160deg, rgba(15, 15, 34, .95), rgba(8, 8, 20, .97));
+    border: 1px solid var(--cs-border);
+    border-radius: 10px;
+    box-shadow: 0 6px 26px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .04);
+    color: var(--cs-text);
+}
+.cs-app .card-header {
+    background: rgba(0, 0, 0, .25);
+    border-bottom: 1px solid var(--cs-border);
+    color: #fff;
+    font-weight: 700;
+    letter-spacing: .02em;
+}
+.cs-app .card.border-danger  { border-color: rgba(224, 85, 85, .55) !important; }
+.cs-app .card.border-warning { border-color: rgba(240, 192, 64, .55) !important; }
+.cs-app .card.border-success { border-color: rgba(62, 207, 110, .45) !important; }
+
+/* List-groups */
+.cs-app .list-group { border-radius: 8px; }
+.cs-app .list-group-item {
+    background: transparent;
+    border-color: rgba(255, 255, 255, .05);
+    color: var(--cs-text);
+}
+.cs-app .list-group-item.list-group-item-danger {
+    background: rgba(224, 85, 85, .10);
+    color: #ffb4b4;
+}
+
+/* Alerts (verdict-banner + flags) */
+.cs-app .alert { border: 1px solid var(--cs-border); border-left-width: 3px; background: rgba(255, 255, 255, .03); color: var(--cs-text); }
+.cs-app .alert-success   { border-left-color: var(--cs-green); background: rgba(62, 207, 110, .08); color: #9be8b8; }
+.cs-app .alert-warning   { border-left-color: var(--cs-gold);  background: rgba(240, 192, 64, .08); color: #ffe08a; }
+.cs-app .alert-danger    { border-left-color: var(--cs-red);   background: rgba(224, 85, 85, .09);  color: #ffb4b4; }
+.cs-app .alert-info      { border-left-color: var(--cs-blue);  background: rgba(0, 180, 216, .08);  color: #8fe3f5; }
+.cs-app .alert-secondary { border-left-color: var(--cs-dim);   background: rgba(255, 255, 255, .03); color: var(--cs-dim); }
+
+/* Verdict-banner prominenter maken (de grote alert met fs-5) */
+.cs-app .alert.fs-5 { border-width: 1px; border-left-width: 1px; border-radius: 8px; text-shadow: 0 0 18px currentColor; }
+
+/* Vetting-flags: tweedelig vakje (label | uitkomst) met statuskleuren */
+.cs-app .cs-flag {
+    display: flex;
+    align-items: stretch;
+    border: 1px solid var(--cs-border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: .5rem;
+    font-size: .82rem;
+}
+.cs-app .cs-flag-label {
+    flex: 0 0 210px;
+    display: flex;
+    align-items: center;
+    padding: .5rem .8rem;
+    font-weight: 700;
+    background: rgba(255, 255, 255, .04);
+    border-right: 1px solid var(--cs-border);
+}
+.cs-app .cs-flag-value {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    padding: .5rem .8rem;
+    color: var(--cs-text);
+    min-width: 0;
+}
+.cs-app .cs-flag-bad  { border-color: rgba(224, 85, 85, .5); }
+.cs-app .cs-flag-bad  .cs-flag-label { background: rgba(224, 85, 85, .15); color: #ff9a9a; border-right-color: rgba(224, 85, 85, .4); }
+.cs-app .cs-flag-warn { border-color: rgba(240, 192, 64, .4); }
+.cs-app .cs-flag-warn .cs-flag-label { background: rgba(240, 192, 64, .14); color: var(--cs-gold); border-right-color: rgba(240, 192, 64, .35); }
+.cs-app .cs-flag-ok   { border-color: rgba(62, 207, 110, .35); }
+.cs-app .cs-flag-ok   .cs-flag-label { background: rgba(62, 207, 110, .12); color: var(--cs-green); border-right-color: rgba(62, 207, 110, .3); }
+.cs-app .cs-flag-info .cs-flag-label { background: rgba(0, 180, 216, .10); color: var(--cs-blue); }
+
+@media (max-width: 576px) {
+    .cs-app .cs-flag { flex-direction: column; }
+    .cs-app .cs-flag-label { flex-basis: auto; border-right: none; border-bottom: 1px solid var(--cs-border); }
+}
+
+/* Badges */
+.cs-app .badge { font-weight: 700; letter-spacing: .03em; }
+.cs-app .badge.bg-success   { background: rgba(62, 207, 110, .18) !important; color: var(--cs-green) !important; }
+.cs-app .badge.bg-danger    { background: rgba(224, 85, 85, .18)  !important; color: #ff8f8f !important; }
+.cs-app .badge.bg-info      { background: rgba(0, 180, 216, .18)  !important; color: var(--cs-blue) !important; }
+.cs-app .badge.bg-warning   { background: rgba(240, 192, 64, .18) !important; color: var(--cs-gold) !important; }
+.cs-app .badge.bg-secondary { background: rgba(255, 255, 255, .08) !important; color: var(--cs-dim) !important; }
+.cs-app .badge.bg-dark      { background: rgba(0, 0, 0, .4)        !important; color: var(--cs-text) !important; }
+
+/* Knoppen */
+.cs-app .btn { font-weight: 600; letter-spacing: .02em; }
+.cs-app .btn-outline-secondary { color: var(--cs-dim); border-color: var(--cs-border); }
+.cs-app .btn-outline-secondary:hover { color: var(--cs-blue); border-color: var(--cs-blue); background: rgba(0, 180, 216, .08); }
+.cs-app .btn-outline-primary, .cs-app .btn-outline-info { color: var(--cs-blue); border-color: rgba(0, 180, 216, .5); }
+.cs-app .btn-outline-primary:hover, .cs-app .btn-outline-info:hover { background: rgba(0, 180, 216, .12); border-color: var(--cs-blue); color: #7fe0f5; }
+.cs-app .btn-outline-success { color: var(--cs-green); border-color: rgba(62, 207, 110, .5); }
+.cs-app .btn-outline-success:hover, .cs-app .btn-success { background: rgba(62, 207, 110, .15); border-color: var(--cs-green); color: #b9f2d0; }
+.cs-app .btn-outline-danger { color: var(--cs-red); border-color: rgba(224, 85, 85, .5); }
+.cs-app .btn-outline-danger:hover { background: rgba(224, 85, 85, .12); border-color: var(--cs-red); color: #ffb4b4; }
+.cs-app .btn-primary {
+    background: linear-gradient(135deg, rgba(0, 180, 216, .9), rgba(0, 140, 180, .95));
+    border: 1px solid rgba(0, 180, 216, .6); color: #021016; font-weight: 700;
+}
+.cs-app .btn-primary:hover { filter: brightness(1.1); }
+/* Actieve filter-chip (btn-primary klein in de lijst) */
+.cs-app .btn-primary.btn-sm { color: #021016; }
+
+/* Portretten */
+.cs-app img.rounded-circle { border: 1px solid var(--cs-border); box-shadow: 0 0 14px rgba(0, 0, 0, .5); }
+
+/* Skills: details/summary */
+.cs-app details > summary { cursor: pointer; color: var(--cs-text); }
+.cs-app details > summary:hover { color: var(--cs-blue); }
+
+/* Formulier-velden (indien gebruikt) */
+.cs-app .form-control, .cs-app .form-select {
+    background: var(--cs-surface); border: 1px solid var(--cs-border); color: var(--cs-text);
+}
+.cs-app .form-control:focus, .cs-app .form-select:focus {
+    background: var(--cs-surface); border-color: var(--cs-blue); color: var(--cs-text);
+    box-shadow: 0 0 0 .2rem rgba(0, 180, 216, .15);
+}

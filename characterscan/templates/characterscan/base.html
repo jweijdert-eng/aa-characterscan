@@ -1,6 +1,7 @@
 {% extends 'allianceauth/base-bs5.html' %}
 
 {% load i18n %}
+{% load static %}
 
 {% block page_title %}
     {% translate "Character Scan" %}
@@ -10,8 +11,11 @@
     {% translate "Character Scan" %}
 {% endblock header_nav_brand %}
 
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'characterscan/characterscan.css' %}">
+{% endblock extra_css %}
+
 {% block content %}
-    {# Styling zit in de site-brede Custom CSS (admin), gescoped op .cs-app #}
     <div class="allianceauth-characterscan-plugin cs-app">
         {% block details %}{% endblock %}
     </div>
