@@ -2,7 +2,18 @@
 
 from django.contrib import admin
 
-from .models import Recruit
+from .models import Recruit, RecruitLogEntry
+
+
+class RecruitLogInline(admin.TabularInline):
+    model = RecruitLogEntry
+    extra = 0
+    can_delete = False
+    ordering = ("-created_at",)
+    readonly_fields = ("action", "actor", "comment", "created_at")
+
+    def has_add_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(Recruit)
@@ -14,6 +25,7 @@ class RecruitAdmin(admin.ModelAdmin):
     raw_id_fields = ("eve_character",)
     readonly_fields = ("applied_at", "updated_at")
     ordering = ("-updated_at",)
+    inlines = [RecruitLogInline]
 
     @admin.display(description="Character", ordering="eve_character__character_name")
     def character_name(self, obj):

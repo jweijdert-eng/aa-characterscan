@@ -1,0 +1,59 @@
+{% extends 'characterscan/base.html' %}
+
+{% load i18n %}
+
+{% block details %}
+    <h2 class="mb-3">{% translate "Log & notities" %}</h2>
+
+    {% include 'characterscan/_tabs.html' %}
+
+    {# Filter op type #}
+    <div class="d-flex gap-2 flex-wrap mb-3">
+        {% for f in log_filters %}
+            <a href="?action={{ f.key }}"
+               class="btn btn-sm {% if action == f.key %}btn-{{ f.color }}{% else %}btn-outline-{{ f.color }}{% endif %}">
+                {{ f.label }}
+            </a>
+        {% endfor %}
+    </div>
+
+    {% if not entries %}
+        <div class="alert alert-secondary">{% translate "Nog niets in de log." %}</div>
+    {% else %}
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead>
+                    <tr>
+                        <th>{% translate "Character" %}</th>
+                        <th>{% translate "Actie" %}</th>
+                        <th>{% translate "Datum & tijd" %}</th>
+                        <th>{% translate "Door" %}</th>
+                        <th>{% translate "Opmerking" %}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for e in entries %}
+                        <tr>
+                            <td>
+                                <a href="{% url 'characterscan:recruit_detail' e.recruit_id %}" class="text-decoration-none d-inline-flex align-items-center gap-2">
+                                    <img src="https://images.evetech.net/characters/{{ e.recruit.eve_character.character_id }}/portrait?size=32"
+                                         alt="" width="24" height="24" class="rounded-circle">
+                                    {{ e.recruit.eve_character.character_name }}
+                                </a>
+                            </td>
+                            <td>
+                                {% if e.action == "accepted" %}<span class="badge bg-success">{{ e.get_action_display }}</span>
+                                {% elif e.action == "rejected" %}<span class="badge bg-danger">{{ e.get_action_display }}</span>
+                                {% elif e.action == "note" %}<span class="badge bg-secondary">{{ e.get_action_display }}</span>
+                                {% else %}<span class="badge bg-info">{{ e.get_action_display }}</span>{% endif %}
+                            </td>
+                            <td class="small">{{ e.created_at|date:"d M Y H:i" }}</td>
+                            <td class="small">{{ e.actor_name }}</td>
+                            <td class="small">{{ e.comment|default:"—" }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+{% endblock %}

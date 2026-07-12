@@ -1,0 +1,13 @@
+{% load i18n %}
+<ul class="nav nav-pills cs-tabs mb-3">
+    <li class="nav-item">
+        <a class="nav-link {% if active_tab == 'list' %}active{% endif %}" href="{% url 'characterscan:recruiter_list' %}">
+            {% translate "Aanmeldingen" %}
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if active_tab == 'log' %}active{% endif %}" href="{% url 'characterscan:activity_log' %}">
+            📝 {% translate "Log & notities" %}
+        </a>
+    </li>
+</ul>

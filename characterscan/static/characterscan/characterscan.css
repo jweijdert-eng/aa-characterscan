@@ -177,6 +177,12 @@
 .cs-app .text-cs-gold { color: var(--cs-gold) !important; }
 .cs-app .text-cs-red { color: var(--cs-red) !important; }
 
+/* Sub-tabs binnen Character Scan (Aanmeldingen · Log & notities) */
+.cs-app .cs-tabs { border-bottom: 1px solid var(--cs-border); padding-bottom: .5rem; }
+.cs-app .cs-tabs .nav-link { color: var(--cs-dim); font-weight: 600; }
+.cs-app .cs-tabs .nav-link:hover { color: var(--cs-blue); }
+.cs-app .cs-tabs .nav-link.active { background-color: var(--cs-blue); color: #021016; }
+
 /* Skills: details/summary */
 .cs-app details > summary { cursor: pointer; color: var(--cs-text); }
 .cs-app details > summary:hover { color: var(--cs-blue); }

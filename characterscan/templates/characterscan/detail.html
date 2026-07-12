@@ -157,6 +157,46 @@
                 </ul>
             </div>
         </div>
+
+        {# Log & notities #}
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">📝 {% translate "Log & notities" %}</div>
+                <div class="card-body">
+                    <form method="post" action="{% url 'characterscan:recruit_action' recruit.pk %}" class="mb-3">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{% url 'characterscan:recruit_detail' recruit.pk %}">
+                        <textarea name="comment" class="form-control mb-2" rows="2"
+                                  placeholder="{% translate 'Opmerking (optioneel) — bijv. reden van aannemen/afwijzen…' %}"></textarea>
+                        <div class="d-flex gap-2 flex-wrap">
+                            <button name="action" value="accepted" class="btn btn-success btn-sm">✓ {% translate "Aannemen" %}</button>
+                            <button name="action" value="rejected" class="btn btn-outline-danger btn-sm">✕ {% translate "Afwijzen" %}</button>
+                            <button name="action" value="note" class="btn btn-outline-secondary btn-sm">💬 {% translate "Notitie toevoegen" %}</button>
+                        </div>
+                    </form>
+
+                    <ul class="list-group list-group-flush" style="max-height:360px;overflow:auto">
+                        {% for e in recruit.log_entries.all %}
+                            <li class="list-group-item">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span>
+                                        {% if e.action == "accepted" %}<span class="badge bg-success">{{ e.get_action_display }}</span>
+                                        {% elif e.action == "rejected" %}<span class="badge bg-danger">{{ e.get_action_display }}</span>
+                                        {% elif e.action == "note" %}<span class="badge bg-secondary">{{ e.get_action_display }}</span>
+                                        {% else %}<span class="badge bg-info">{{ e.get_action_display }}</span>{% endif %}
+                                        <span class="text-body ms-1">{{ e.actor_name }}</span>
+                                    </span>
+                                    <span class="text-muted small">{{ e.created_at|date:"d M Y H:i" }}</span>
+                                </div>
+                                {% if e.comment %}<div class="small mt-1">{{ e.comment }}</div>{% endif %}
+                            </li>
+                        {% empty %}
+                            <li class="list-group-item text-muted">{% translate "Nog geen acties gelogd." %}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
     </div>
     {% endwith %}
 {% endblock %}

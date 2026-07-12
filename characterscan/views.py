@@ -14,7 +14,7 @@ from django.utils.translation import gettext_lazy as _
 from allianceauth.eveonline.models import EveCharacter
 from esi.decorators import token_required
 
-from .models import Recruit
+from .models import Recruit, RecruitLogEntry
 from .profile import basic_stats, full_profile
 from .vetting import (
     ALLIANCE_CONTACTS_SCOPE,
@@ -78,7 +78,7 @@ def apply(request: WSGIRequest) -> HttpResponse:
 @permission_required("characterscan.recruiter")
 def recruiter_list(request: WSGIRequest) -> HttpResponse:
     """Overzicht van alle aanmeldingen voor recruiters."""
-    status = request.GET.get("status", "all")
+    status = request.GET.get("status", "new")
     qs = Recruit.objects.select_related("eve_character")
     counts = {row["status"]: row["n"] for row in qs.values("status").annotate(n=Count("id"))}
     counts["all"] = sum(counts.get(s, 0) for s in ("new", "accepted", "rejected"))
@@ -111,7 +111,29 @@ def recruiter_list(request: WSGIRequest) -> HttpResponse:
             "filters": filters,
             "status": status,
             "needs_standings_grant": not standings_token_exists(),
+            "active_tab": "list",
         },
+    )
+
+
+@login_required
+@permission_required("characterscan.recruiter")
+def activity_log(request: WSGIRequest) -> HttpResponse:
+    """Overzicht van beslissingen/notities (wie, wanneer, opmerking)."""
+    action = request.GET.get("action", "accepted")
+    qs = RecruitLogEntry.objects.select_related("recruit__eve_character", "actor").order_by("-created_at")
+    if action in ("accepted", "rejected", "note", "new"):
+        qs = qs.filter(action=action)
+    tabs = [
+        {"key": "accepted", "label": _("Aangenomen"), "color": "success"},
+        {"key": "rejected", "label": _("Afgewezen"), "color": "danger"},
+        {"key": "note", "label": _("Notities"), "color": "secondary"},
+        {"key": "all", "label": _("Alles"), "color": "info"},
+    ]
+    return render(
+        request,
+        "characterscan/log.html",
+        {"entries": qs[:500], "action": action, "log_filters": tabs, "active_tab": "log"},
     )
 
 
@@ -156,14 +178,28 @@ def recruit_action(request: WSGIRequest, pk: int) -> HttpResponse:
         return redirect("characterscan:recruiter_list")
     recruit = get_object_or_404(Recruit, pk=pk)
     action = request.POST.get("action")
+    comment = request.POST.get("comment", "").strip()
     name = recruit.eve_character.character_name
+
     if action == "delete":
         recruit.delete()
         messages.success(request, _("Aanmelding van %(n)s verwijderd.") % {"n": name})
         return redirect("characterscan:recruiter_list")
-    if action in ("accepted", "rejected", "new"):
+
+    if action == "note":
+        if comment:
+            RecruitLogEntry.objects.create(
+                recruit=recruit, actor=request.user, action="note", comment=comment
+            )
+            messages.success(request, _("Notitie toegevoegd."))
+        else:
+            messages.info(request, _("Lege notitie — niets opgeslagen."))
+    elif action in ("accepted", "rejected", "new"):
         recruit.status = action
         recruit.save(update_fields=["status", "updated_at"])
+        RecruitLogEntry.objects.create(
+            recruit=recruit, actor=request.user, action=action, comment=comment
+        )
         messages.success(request, _("Status van %(n)s bijgewerkt.") % {"n": name})
-    # Terug naar waar de actie vandaan kwam
+
     return redirect(request.POST.get("next") or "characterscan:recruiter_list")
