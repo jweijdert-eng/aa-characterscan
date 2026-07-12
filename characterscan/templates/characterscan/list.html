@@ -87,21 +87,17 @@
                                         <div class="small text-warning mt-1">{% translate "niet in Member Audit" %}</div>
                                     {% endif %}
                                     <div class="d-flex gap-1 mt-2">
-                                        <form method="post" action="{% url 'characterscan:recruit_action' r.pk %}">
+                                        <form method="post" action="{% url 'characterscan:recruit_action' r.pk %}" class="cs-decide">
                                             {% csrf_token %}
                                             <input type="hidden" name="action" value="accepted">
+                                            <input type="hidden" name="comment" value="">
                                             <button class="btn btn-outline-success btn-sm">✓</button>
                                         </form>
-                                        <form method="post" action="{% url 'characterscan:recruit_action' r.pk %}">
+                                        <form method="post" action="{% url 'characterscan:recruit_action' r.pk %}" class="cs-decide">
                                             {% csrf_token %}
                                             <input type="hidden" name="action" value="rejected">
+                                            <input type="hidden" name="comment" value="">
                                             <button class="btn btn-outline-danger btn-sm">✕</button>
-                                        </form>
-                                        <form method="post" action="{% url 'characterscan:recruit_action' r.pk %}"
-                                              onsubmit="return confirm('{% translate "Aanmelding verwijderen?" %}');">
-                                            {% csrf_token %}
-                                            <input type="hidden" name="action" value="delete">
-                                            <button class="btn btn-outline-secondary btn-sm">🗑</button>
                                         </form>
                                     </div>
                                 </div>
@@ -112,4 +108,16 @@
             {% endfor %}
         </div>
     {% endif %}
+
+    {# Bij aannemen/afwijzen op de kaart: vraag om een (optionele) opmerking voor de log #}
+    <script>
+        document.querySelectorAll('form.cs-decide').forEach(function (f) {
+            f.addEventListener('submit', function (e) {
+                var note = window.prompt('Opmerking bij deze beslissing (optioneel):', '');
+                if (note === null) { e.preventDefault(); return; }  // geannuleerd
+                var input = f.querySelector('input[name="comment"]');
+                if (input) { input.value = note; }
+            });
+        });
+    </script>
 {% endblock %}
