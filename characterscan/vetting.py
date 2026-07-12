@@ -270,10 +270,10 @@ def wallet_flags(profile, enemy):
     if incoming:
         warn += 1
         items = [f"{_fmt_isk(j['amount'])} ISK van <b>{cp(j)}</b> ({_fmt_date(j.get('date'))})" for j in incoming[:5]]
-        flags.append({"level": "warn", "css": "warning", "text": "Grote inkomende ISK-donaties: " + "; ".join(items)})
+        flags.append({"level": "warn", "css": "warning", "label": "ISK-donatie (in)", "value": "; ".join(items)})
     if outgoing:
         items = [f"{_fmt_isk(abs(float(j['amount'])))} ISK naar <b>{cp(j)}</b> ({_fmt_date(j.get('date'))})" for j in outgoing[:5]]
-        flags.append({"level": "info", "css": "secondary", "text": "Grote uitgaande ISK-donaties: " + "; ".join(items)})
+        flags.append({"level": "info", "css": "secondary", "label": "ISK-donatie (uit)", "value": "; ".join(items)})
 
     if enemy:
         hits = []
@@ -286,13 +286,13 @@ def wallet_flags(profile, enemy):
         if hits:
             bad += 1
             flags.append({"level": "bad", "css": "danger",
-                          "text": "ISK-transacties met vijand(en): " + "; ".join(list(dict.fromkeys(hits))[:6])})
+                          "label": "ISK met vijand", "value": "; ".join(list(dict.fromkeys(hits))[:6])})
 
     biggest = max(journal, key=lambda j: abs(float(j.get("amount") or 0)))
     if biggest.get("amount") and abs(float(biggest["amount"])) >= threshold and not big_don:
-        flags.append({"level": "info", "css": "secondary",
-                      "text": f"Grootste transactie: {_fmt_isk(biggest['amount'])} ISK "
-                              f"({(biggest.get('ref_type') or '').replace('_', ' ')}, {_fmt_date(biggest.get('date'))})."})
+        flags.append({"level": "info", "css": "secondary", "label": "Grootste transactie",
+                      "value": f"{_fmt_isk(biggest['amount'])} ISK "
+                               f"({(biggest.get('ref_type') or '').replace('_', ' ')}, {_fmt_date(biggest.get('date'))})"})
     return flags, bad, warn
 
 
@@ -330,30 +330,37 @@ def assess(eve_character, enemy, with_zkill=True):
 
     bad = warn = 0
 
+    def flag(level, css, label, value):
+        flags.append({"level": level, "css": css, "label": label, "value": value})
+
     # Risk-skills
     risk = profile.get("risk_skills", [])
     if risk:
         warn += 1
         by_label = {}
         for s in risk:
-            by_label.setdefault(s["label"], []).append(f"{s['name']} L{s['level']}")
-        txt = " · ".join(f"<b>{k}</b> ({', '.join(v)})" for k, v in by_label.items())
-        flags.append({"level": "warn", "css": "warning", "text": f"Risk-skills: {txt}"})
+            g = by_label.setdefault(s["label"], {"max": 0, "detail": []})
+            g["max"] = max(g["max"], s["level"])
+            g["detail"].append(f"{s['name']} L{s['level']}")
+        # compact: categorie + hoogste level, volledige skills in de tooltip
+        txt = " · ".join(
+            f'<b title="{", ".join(g["detail"])}">{k}</b> L{g["max"]}' for k, g in by_label.items()
+        )
+        flag("warn", "warning", "Risk-skills", txt)
     else:
-        flags.append({"level": "ok", "css": "success", "text": "Geen cyno/covert/blops/recon/jump-skills."})
+        flag("ok", "success", "Risk-skills", "Geen cyno/covert/blops/recon/jump")
 
     # Leeftijd
     age = profile.get("age_years")
     if age is not None:
         if age < 0.1:
             bad += 1
-            flags.append({"level": "bad", "css": "danger",
-                          "text": f"<b>Zeer jong character</b> ({int(age*365)} dagen) — mogelijk wegwerp-/spy-alt."})
+            flag("bad", "danger", "Leeftijd", f"<b>Zeer jong</b> ({int(age*365)} dagen) — mogelijk wegwerp-/spy-alt")
         elif age < 0.5:
             warn += 1
-            flags.append({"level": "warn", "css": "warning", "text": f"Jong character ({age} jaar) — extra check waard."})
+            flag("warn", "warning", "Leeftijd", f"Jong ({age} jaar) — extra check waard")
         else:
-            flags.append({"level": "ok", "css": "success", "text": f"Leeftijd: {age} jaar."})
+            flag("ok", "success", "Leeftijd", f"{age} jaar")
 
     # Corp-hopping (player-corps; NPC al gefilterd in de fetch)
     hist = sorted(
@@ -370,24 +377,21 @@ def assess(eve_character, enemy, with_zkill=True):
                 short += 1
         if len(recent) >= 5:
             warn += 1
-            flags.append({"level": "warn", "css": "warning",
-                          "text": f"<b>Corp-hopping</b>: {len(recent)} player-corps in de laatste 12 maanden."})
+            flag("warn", "warning", "Werkgevershistorie", f"<b>Corp-hopping</b>: {len(recent)} player-corps in 12 mnd")
         elif short >= 3:
             warn += 1
-            flags.append({"level": "warn", "css": "warning",
-                          "text": f"<b>Korte corp-stints</b>: {short}× een player-corp binnen 14 dagen verlaten."})
+            flag("warn", "warning", "Werkgevershistorie", f"<b>Korte stints</b>: {short}× een player-corp binnen 14 dagen verlaten")
         else:
-            flags.append({"level": "ok", "css": "success",
-                          "text": f"Stabiele werkgevershistorie ({len(hist)} player-corps)."})
+            flag("ok", "success", "Werkgevershistorie", f"Stabiel ({len(hist)} player-corps)")
 
     # Sec + SP
     sec = profile.get("sec")
     if sec is not None and sec < -2:
         warn += 1
-        flags.append({"level": "warn", "css": "warning", "text": f"Negatieve security status: {sec:.1f}."})
+        flag("warn", "warning", "Security status", f"{sec:.1f} (negatief)")
     sp = profile.get("total_sp")
     if sp is not None and sp < 5_000_000:
-        flags.append({"level": "info", "css": "secondary", "text": f"Lage skillpoints ({sp/1e6:.1f}M SP) — relatief nieuw character."})
+        flag("info", "secondary", "Skillpoints", f"{sp/1e6:.1f}M — relatief nieuw character")
 
     # Wallet-scan
     w_flags, w_bad, w_warn = wallet_flags(profile, enemy)
@@ -404,37 +408,36 @@ def assess(eve_character, enemy, with_zkill=True):
             danger = zk.get("dangerRatio", 0)
             solo = zk.get("soloKills", 0) or 0
             if destroyed + lost == 0:
-                flags.append({"level": "info", "css": "secondary", "text": "Geen PvP-historie op zKillboard."})
+                flag("info", "secondary", "zKillboard", "Geen PvP-historie")
             else:
-                flags.append({"level": "info", "css": "secondary",
-                              "text": f"zKill: <b>{destroyed}</b> kills / <b>{lost}</b> losses · danger {danger}% · {solo} solo."})
+                flag("info", "secondary", "zKillboard",
+                     f"<b>{destroyed}</b> kills / <b>{lost}</b> losses · danger {danger}% · {solo} solo")
         else:
-            flags.append({"level": "info", "css": "secondary", "text": "zKillboard-historie kon niet geladen worden."})
+            flag("info", "secondary", "zKillboard", "kon niet geladen worden")
 
     # Vijand-checks
     if not enemy:
-        flags.append({"level": "info", "css": "secondary",
-                      "text": "Geen vijandenlijst geladen. Vijand-checks overgeslagen."})
+        flag("info", "secondary", "Vijandenlijst", "Niet geladen — checks overgeslagen")
     else:
         hits = enemy_hits(profile, enemy)
         if hits["current"]:
             bad += 1
-            flags.append({"level": "bad", "css": "danger", "text": "Zit nu in vijandige " + ", ".join(hits["current"])})
+            flag("bad", "danger", "Huidige corp/alliance", "Vijandig: " + ", ".join(hits["current"]))
         if hits["history"]:
             bad += 1
-            flags.append({"level": "bad", "css": "danger", "text": "Historie bevat vijand(en): " + ", ".join(dict.fromkeys(hits["history"]))})
+            flag("bad", "danger", "Vijand in historie", ", ".join(dict.fromkeys(hits["history"])))
         else:
-            flags.append({"level": "ok", "css": "success", "text": "Geen vijanden in werkgevershistorie (corp + alliance gecheckt)."})
+            flag("ok", "success", "Vijand in historie", "Geen (corp + alliance gecheckt)")
         if hits["blue"]:
             bad += 1
-            flags.append({"level": "bad", "css": "danger", "text": "Heeft vijand(en) blauw in contacts: " + ", ".join(dict.fromkeys(hits["blue"]))})
+            flag("bad", "danger", "Vijand blauw in contacts", ", ".join(dict.fromkeys(hits["blue"])))
         else:
-            flags.append({"level": "ok", "css": "success", "text": "Geen vijanden blauw in contacts."})
+            flag("ok", "success", "Vijand blauw in contacts", "Geen")
         if hits["contracts"]:
             bad += 1
-            flags.append({"level": "bad", "css": "danger", "text": "Contracten met vijand(en): " + ", ".join(dict.fromkeys(hits["contracts"]))})
+            flag("bad", "danger", "Contracten met vijand", ", ".join(dict.fromkeys(hits["contracts"])))
         else:
-            flags.append({"level": "ok", "css": "success", "text": "Geen contracten met bekende vijanden."})
+            flag("ok", "success", "Contracten met vijand", "Geen")
 
     verdict = VERDICTS["bad"] if bad else VERDICTS["warn"] if warn else VERDICTS["ok"]
     return {"verdict": verdict, "flags": flags}

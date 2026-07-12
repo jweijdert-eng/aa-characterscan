@@ -52,7 +52,10 @@
                 {{ vetting.verdict.icon }} {{ vetting.verdict.label }}
             </div>
             {% for f in vetting.flags %}
-                <div class="alert alert-{{ f.css }} py-2 mb-2 small">{{ f.text|safe }}</div>
+                <div class="cs-flag cs-flag-{{ f.level }}">
+                    <span class="cs-flag-label">{{ f.label }}</span>
+                    <span class="cs-flag-value"><span>{{ f.value|safe }}</span></span>
+                </div>
             {% endfor %}
         </div>
     </div>
