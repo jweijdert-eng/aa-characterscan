@@ -4,6 +4,7 @@ Character Scan is hiermee niet meer afhankelijk van Member Audit-modellen.
 """
 
 from .esi_fetch import get_profile
+from .vetting import _parse_date, _scan_text
 
 
 def basic_stats(eve_character):
@@ -40,6 +41,13 @@ def full_profile(eve_character, enemy=None):
         c["acceptor_enemy"] = c.get("acceptor_id") in enemy
         c["is_enemy"] = c["issuer_enemy"] or c["assignee_enemy"] or c["acceptor_enemy"]
 
+    mails = p.get("mails", [])
+    for m in mails:
+        m["suspect"] = sorted(_scan_text((m.get("subject") or "") + " " + (m.get("body") or "")))
+        parties = [m.get("from_id")] + (m.get("recipient_ids") or [])
+        m["is_enemy"] = any(pid in enemy for pid in parties if pid)
+        m["date_parsed"] = _parse_date(m.get("date"))
+
     return {
         "stats": basic_stats(eve_character),
         "registered": p.get("ok", False),
@@ -48,4 +56,5 @@ def full_profile(eve_character, enemy=None):
         "corp_history": p.get("corp_history", []),
         "contacts": p.get("contacts", []),
         "contracts": p.get("contracts", []),
+        "mails": mails,
     }

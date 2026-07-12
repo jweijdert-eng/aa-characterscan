@@ -158,6 +158,38 @@
             </div>
         </div>
 
+        {# Mails (gescand) #}
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">✉ {% translate "Mails (gescand)" %}
+                    <span class="text-muted small">— {% translate "laatste 15; onderwerp + inhoud op verdachte termen, externe links en vijandcontact" %}</span>
+                </div>
+                <ul class="list-group list-group-flush" style="max-height:460px;overflow:auto">
+                    {% for m in profile.mails %}
+                        <li class="list-group-item {% if m.is_enemy %}list-group-item-danger{% endif %}">
+                            <div class="d-flex justify-content-between align-items-start gap-2">
+                                <span class="fw-semibold {% if m.is_enemy %}text-danger{% endif %}">{% if m.is_enemy or m.suspect %}⚠ {% endif %}{{ m.subject|default:"(geen onderwerp)" }}</span>
+                                <span class="text-muted small text-nowrap">{{ m.date_parsed|date:"d M Y H:i" }}</span>
+                            </div>
+                            <div class="small text-muted mt-1">
+                                {% translate "van" %} <span class="{% if m.is_enemy %}text-danger fw-bold{% else %}text-body{% endif %}">{{ m.from_name|default:"?" }}</span>
+                                {% if m.is_enemy %}<span class="badge bg-danger ms-1">{% translate "vijand" %}</span>{% endif %}
+                                {% for t in m.suspect %}<span class="badge bg-warning ms-1">{{ t }}</span>{% endfor %}
+                            </div>
+                            {% if m.body %}
+                                <details class="mt-1">
+                                    <summary class="small">{% translate "toon bericht" %}</summary>
+                                    <div class="cs-mail-body">{{ m.body }}</div>
+                                </details>
+                            {% endif %}
+                        </li>
+                    {% empty %}
+                        <li class="list-group-item text-muted">{% translate "Geen mails opgehaald — recruit heeft de mail-scope niet verleend of heeft geen recente mails." %}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+
         {# Log & notities #}
         <div class="col-12">
             <div class="card">

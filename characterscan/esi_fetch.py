@@ -10,6 +10,8 @@ Zo is Character Scan niet langer afhankelijk van Member Audit.
 """
 
 import logging
+import re
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone as dt_timezone
 
 import requests
@@ -35,7 +37,16 @@ CS_RECRUIT_SCOPES = [
     "esi-location.read_location.v1",
     "esi-location.read_ship_type.v1",
     "esi-clones.read_clones.v1",
+    "esi-mail.read_mail.v1",
 ]
+
+# Skill-injector-types (vaste ESI type_ids)
+LARGE_SKILL_INJECTOR = 40520
+SMALL_SKILL_INJECTOR = 45635
+SKILL_INJECTOR_TYPES = {
+    LARGE_SKILL_INJECTOR: "Large Skill Injector",
+    SMALL_SKILL_INJECTOR: "Small Skill Injector",
+}
 
 RISK_SKILL_PATTERNS = [
     ("cyno", "Cyno"),
@@ -99,6 +110,16 @@ def _auth(path, token, paged=False):
             break
         page += 1
     return out
+
+
+def _parallel(jobs, max_workers=10):
+    """Voer een dict {key: callable} gelijktijdig uit → {key: resultaat}.
+    Scheelt veel laadtijd t.o.v. de calls serieel afvuren."""
+    if not jobs:
+        return {}
+    with ThreadPoolExecutor(max_workers=min(max_workers, len(jobs))) as ex:
+        futs = {k: ex.submit(fn) for k, fn in jobs.items()}
+        return {k: f.result() for k, f in futs.items()}
 
 
 def _names(ids):
@@ -181,25 +202,76 @@ def _owner_info(eve_character):
     return None, False
 
 
+def _skill_injectors(transactions):
+    """Tel gekochte skill-injectors uit de wallet-transacties → samenvatting."""
+    buys = [t for t in transactions
+            if t.get("is_buy") and t.get("type_id") in SKILL_INJECTOR_TYPES]
+    large = sum(t.get("quantity", 0) or 0 for t in buys if t.get("type_id") == LARGE_SKILL_INJECTOR)
+    small = sum(t.get("quantity", 0) or 0 for t in buys if t.get("type_id") == SMALL_SKILL_INJECTOR)
+    dates = sorted(t.get("date") for t in buys if t.get("date"))
+    isk = sum((t.get("quantity", 0) or 0) * (t.get("unit_price", 0) or 0) for t in buys)
+    return {
+        "large": large,
+        "small": small,
+        "total": large + small,
+        "buys": len(buys),
+        "first": dates[0] if dates else None,
+        "last": dates[-1] if dates else None,
+        "isk": isk,
+        "has_transactions": bool(transactions),
+    }
+
+
+def _strip_html(html):
+    """EVE-mail-body (HTML) → platte tekst."""
+    h = re.sub(r"<br\s*/?>", "\n", html or "", flags=re.I)
+    h = re.sub(r"</p>", "\n", h, flags=re.I)
+    h = re.sub(r"<[^>]+>", "", h)
+    for a, b in (("&lt;", "<"), ("&gt;", ">"), ("&amp;", "&"), ("&nbsp;", " ")):
+        h = h.replace(a, b)
+    return h.strip()
+
+
 # ── LIVE ophalen via ESI ─────────────────────────────────────────────────────
 def _fetch_live(eve_character, token):
     cid = eve_character.character_id
     access = token.valid_access_token()
 
-    info = _pub(f"/characters/{cid}/")
-    wallet = _auth(f"/characters/{cid}/wallet/", access)
-    skills_raw = _auth(f"/characters/{cid}/skills/", access)
-    contacts_raw = _auth(f"/characters/{cid}/contacts/", access, paged=True)
-    contracts_raw = _auth(f"/characters/{cid}/contracts/", access, paged=True)
-    journal_raw = _auth(f"/characters/{cid}/wallet/journal/", access)
-    loc = _auth(f"/characters/{cid}/location/", access)
-    ship = _auth(f"/characters/{cid}/ship/", access)
-    hist_raw = _pub(f"/characters/{cid}/corporationhistory/") or []
+    # Alle onafhankelijke ESI-calls tegelijk ophalen (parallel i.p.v. serieel)
+    res = _parallel({
+        "info": lambda: _pub(f"/characters/{cid}/"),
+        "wallet": lambda: _auth(f"/characters/{cid}/wallet/", access),
+        "skills": lambda: _auth(f"/characters/{cid}/skills/", access),
+        "contacts": lambda: _auth(f"/characters/{cid}/contacts/", access, paged=True),
+        "contracts": lambda: _auth(f"/characters/{cid}/contracts/", access, paged=True),
+        "journal": lambda: _auth(f"/characters/{cid}/wallet/journal/", access),
+        "transactions": lambda: _auth(f"/characters/{cid}/wallet/transactions/", access),
+        "loc": lambda: _auth(f"/characters/{cid}/location/", access),
+        "ship": lambda: _auth(f"/characters/{cid}/ship/", access),
+        "hist": lambda: _pub(f"/characters/{cid}/corporationhistory/"),
+        "mail": lambda: _auth(f"/characters/{cid}/mail/", access),
+    })
+    info = res["info"]
+    wallet = res["wallet"]
+    skills_raw = res["skills"]
+    contacts_raw = res["contacts"]
+    contracts_raw = res["contracts"]
+    journal_raw = res["journal"]
+    transactions_raw = res["transactions"]
+    loc = res["loc"]
+    ship = res["ship"]
+    hist_raw = res["hist"] or []
+    mail_raw = res["mail"]
 
     skills = (skills_raw or {}).get("skills", []) if isinstance(skills_raw, dict) else []
     contacts_raw = contacts_raw if isinstance(contacts_raw, list) else []
     contracts_raw = contracts_raw if isinstance(contracts_raw, list) else []
     journal_raw = journal_raw if isinstance(journal_raw, list) else []
+    transactions_raw = transactions_raw if isinstance(transactions_raw, list) else []
+    recent_mails = (mail_raw if isinstance(mail_raw, list) else [])[:15]
+
+    # Skill-injector-aankopen uit de transacties (spy-/farm-signaal)
+    skill_injectors = _skill_injectors(transactions_raw)
 
     # Verzamel ids voor namen
     ids = set()
@@ -216,22 +288,45 @@ def _fetch_live(eve_character, token):
     for c in contracts_raw:
         ids.update(filter(None, [c.get("issuer_id"), c.get("assignee_id"),
                                  c.get("acceptor_id"), c.get("issuer_corporation_id")]))
+    for m in recent_mails:
+        ids.add(m.get("from"))
+        ids.update(r.get("recipient_id") for r in m.get("recipients", []))
+    ids.discard(None)
     name_map = _names(ids)
 
-    # Corp-historie + alliance per corp
+    # Mails: koppen + (per mail) de body parallel ophalen en strippen
+    def _body(m):
+        full = _auth(f"/characters/{cid}/mail/{m['mail_id']}/", access)
+        return _strip_html(full.get("body", "")) if isinstance(full, dict) else ""
+
+    body_map = _parallel(
+        {i: (lambda mm=m: _body(mm)) for i, m in enumerate(recent_mails)}, max_workers=8
+    )
+    bodies = [body_map.get(i, "") for i in range(len(recent_mails))]
+    mails = [{
+        "subject": m.get("subject", ""),
+        "from_id": m.get("from"),
+        "from_name": name_map.get(m.get("from")),
+        "recipient_ids": [r.get("recipient_id") for r in m.get("recipients", [])],
+        "date": m.get("timestamp"),
+        "body": body,
+    } for m, body in zip(recent_mails, bodies)]
+
+    # Corp-historie + alliance per corp (alliance-lookups parallel)
     from .vetting import corp_alliance  # hergebruik gecachte lookup
-    corp_history = []
-    for h in sorted(hist_raw, key=lambda x: x["start_date"], reverse=True):
-        corp_id = h["corporation_id"]
-        if corp_id < 98_000_000:
-            continue  # NPC-corp
-        corp_history.append({
-            "corp_id": corp_id,
-            "corp_name": name_map.get(corp_id, str(corp_id)),
-            "alliance_id": corp_alliance(corp_id),
-            "start": h["start_date"],
-            "is_deleted": h.get("is_deleted", False),
-        })
+    player_hist = [h for h in sorted(hist_raw, key=lambda x: x["start_date"], reverse=True)
+                   if h["corporation_id"] >= 98_000_000]  # NPC-corps eruit
+    alliance_map = _parallel(
+        {h["corporation_id"]: (lambda c=h["corporation_id"]: corp_alliance(c)) for h in player_hist},
+        max_workers=8,
+    )
+    corp_history = [{
+        "corp_id": h["corporation_id"],
+        "corp_name": name_map.get(h["corporation_id"], str(h["corporation_id"])),
+        "alliance_id": alliance_map.get(h["corporation_id"]),
+        "start": h["start_date"],
+        "is_deleted": h.get("is_deleted", False),
+    } for h in player_hist]
 
     skill_list = [{"skill_id": s["skill_id"],
                    "skillpoints_in_skill": s.get("skillpoints_in_skill", 0),
@@ -293,6 +388,7 @@ def _fetch_live(eve_character, token):
         "age_years": _age_years(info.get("birthday")) if info else None,
         "wallet": wallet if isinstance(wallet, (int, float)) else None,
         "total_sp": (skills_raw or {}).get("total_sp") if isinstance(skills_raw, dict) else None,
+        "unallocated_sp": (skills_raw or {}).get("unallocated_sp") if isinstance(skills_raw, dict) else None,
         "skill_count": len(skill_list),
         "skill_groups": skill_groups,
         "risk_skills": risk_skills,
@@ -300,6 +396,8 @@ def _fetch_live(eve_character, token):
         "contracts": contracts,
         "corp_history": corp_history,
         "wallet_journal": journal,
+        "mails": mails,
+        "skill_injectors": skill_injectors,
         "ship_name": name_map.get(ship.get("ship_type_id")) if ship else None,
         "system_id": loc.get("solar_system_id") if loc else None,
     }
@@ -402,6 +500,7 @@ def _fetch_memberaudit(eve_character):
         "age_years": _age_years(getattr(details, "birthday", None)),
         "wallet": getattr(wallet, "total", None),
         "total_sp": getattr(sp, "total", None),
+        "unallocated_sp": getattr(sp, "unallocated", None),
         "skill_count": skill_count,
         "skill_groups": skill_groups, "risk_skills": risk_skills,
         "contacts": contacts, "contracts": contracts,
@@ -418,7 +517,7 @@ def _empty(eve_character):
         "corp_id": eve_character.corporation_id, "corp_name": eve_character.corporation_name,
         "alliance_id": eve_character.alliance_id, "alliance_name": eve_character.alliance_name or "",
         "owner_main": owner_main, "is_alt": is_alt,
-        "sec": None, "age_years": None, "wallet": None, "total_sp": None, "skill_count": None,
+        "sec": None, "age_years": None, "wallet": None, "total_sp": None, "unallocated_sp": None, "skill_count": None,
         "skill_groups": [], "risk_skills": [], "contacts": [], "contracts": [],
         "corp_history": [], "wallet_journal": [], "ship_name": None, "system_id": None,
     }

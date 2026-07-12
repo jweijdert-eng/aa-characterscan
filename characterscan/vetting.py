@@ -6,6 +6,7 @@ De vijandenlijst ("enemy set") = dict {entity_id: naam}, primair uit de corp+all
 standings (automatisch), met een handmatige aanvulling en een MA-fallback.
 """
 
+import re
 from datetime import datetime, timedelta
 from datetime import timezone as dt_timezone
 
@@ -27,6 +28,35 @@ VERDICTS = {
 
 CORP_CONTACTS_SCOPE = "esi-corporations.read_contacts.v1"
 ALLIANCE_CONTACTS_SCOPE = "esi-alliances.read_contacts.v1"
+
+# Verdachte termen in mailinhoud (spy/intel/externe comms) — voor de mail-scan.
+SUSPECT_TERMS = [
+    (re.compile(r"\bspy(ing|s)?\b", re.I), "spy"),
+    (re.compile(r"\bawox", re.I), "awox"),
+    (re.compile(r"\bintel\b", re.I), "intel"),
+    (re.compile(r"\bmole\b", re.I), "mole"),
+    (re.compile(r"infiltrat", re.I), "infiltrate"),
+    (re.compile(r"hot[- ]?drop", re.I), "hotdrop"),
+    (re.compile(r"honeypot", re.I), "honeypot"),
+    (re.compile(r"cyno\s*alt", re.I), "cyno alt"),
+    (re.compile(r"\btitan\b", re.I), "titan"),
+    (re.compile(r"supercarrier|\bsupers?\b", re.I), "supers"),
+    (re.compile(r"discord(\.gg|app\.com)?", re.I), "Discord"),
+    (re.compile(r"teamspeak|ts3", re.I), "TeamSpeak"),
+    (re.compile(r"mumble", re.I), "Mumble"),
+]
+URL_RE = re.compile(r"https?://[^\s\"'<>]+", re.I)
+
+
+def _scan_text(txt):
+    """Verdachte termen + externe links in een stuk tekst → set labels."""
+    hits = set()
+    for rx, label in SUSPECT_TERMS:
+        if rx.search(txt or ""):
+            hits.add(label)
+    if URL_RE.search(txt or ""):
+        hits.add("externe link")
+    return hits
 
 
 # ── Datum/ISK-helpers ────────────────────────────────────────────────────────
@@ -399,6 +429,79 @@ def assess(eve_character, enemy, with_zkill=True):
     warn += w_warn
     flags.extend(w_flags)
 
+    # Skill-injector-scan: veel Large Skill Injectors = snel opgekrikt (spy/farm-signaal)
+    inj = profile.get("skill_injectors") or {}
+    if inj.get("has_transactions"):
+        threshold = int(getattr(settings, "CHARACTERSCAN_INJECTOR_ALERT", 5))
+        large, small, total = inj.get("large", 0), inj.get("small", 0), inj.get("total", 0)
+        span = ""
+        if inj.get("first") and inj.get("last"):
+            span = f", {_fmt_date(inj['first'])}–{_fmt_date(inj['last'])}"
+        if large >= threshold:
+            warn += 1
+            flag("warn", "warning", "Skill injectors",
+                 f"<b>Veel Large Skill Injectors</b>: {large}× gekocht"
+                 f" (~{_fmt_isk(inj.get('isk', 0))} ISK{span}) — snel opgekrikt character")
+        elif total > 0:
+            parts = []
+            if large:
+                parts.append(f"{large}× Large")
+            if small:
+                parts.append(f"{small}× Small")
+            flag("info", "secondary", "Skill injectors", ", ".join(parts) + f" gekocht{span}")
+        else:
+            flag("ok", "success", "Skill injectors", "Geen gekocht (market-transacties)")
+
+    # Onverdeelde SP: net geïnjecteerde of in de EVE-store gekochte SP staat 'los'
+    # tot je 'm toewijst — vangt injectors/store-SP die niet via de markt liepen.
+    unallocated = profile.get("unallocated_sp") or 0
+    if unallocated >= 500_000:  # ~1 injector of store-SP-pakket dat nog niet is verdeeld
+        warn += 1
+        flag("warn", "warning", "Onverdeelde SP",
+             f"<b>{unallocated/1e6:.1f}M onverdeelde SP</b> — recent geïnjecteerd of in de "
+             f"EVE-store gekocht, nog niet toegewezen")
+    elif unallocated > 0:
+        flag("info", "secondary", "Onverdeelde SP",
+             f"{unallocated/1e3:.0f}k (klein — bijv. login-/event-beloningen)")
+
+    # SP versus leeftijd: veel meer SP dan natuurlijk trainbaar → geïnjecteerd.
+    # Getraind + onverdeeld samen, want beide zijn 'verkregen' SP (ook store-SP).
+    sp = profile.get("total_sp")
+    age = profile.get("age_years")
+    if sp and age and age >= 0.05:
+        effective = sp + unallocated
+        max_natural = age * 24_000_000  # ~max SP/jaar (+5 implants, perfecte remaps)
+        if effective > max_natural * 1.2:
+            est = max(1, int((effective - max_natural) / 400_000))  # ~400k SP per Large injector
+            warn += 1
+            flag("warn", "warning", "SP vs. leeftijd",
+                 f"<b>{effective/1e6:.0f}M SP</b> in {age} jaar — meer dan natuurlijk mogelijk "
+                 f"(~{est} injectors geschat)")
+
+    # Mail-scan: verdachte termen/externe links + mailcontact met vijanden
+    mails = profile.get("mails", [])
+    if mails:
+        all_terms = set()
+        for m in mails:
+            all_terms |= _scan_text((m.get("subject", "") + " " + m.get("body", "")))
+        if all_terms:
+            warn += 1
+            flag("warn", "warning", "Verdachte mails", ", ".join(sorted(all_terms)))
+        else:
+            flag("ok", "success", "Mails", "Geen verdachte termen of externe links")
+        if enemy:
+            hits = []
+            for m in mails:
+                parties = [m.get("from_id")] + (m.get("recipient_ids") or [])
+                if any(p in enemy for p in parties if p):
+                    who = m.get("from_name") or "?"
+                    hits.append(f"{m.get('subject') or '(geen onderwerp)'} — {who}")
+            if hits:
+                bad += 1
+                flag("bad", "danger", "Mail met vijand", "; ".join(list(dict.fromkeys(hits))[:5]))
+            else:
+                flag("ok", "success", "Mail met vijand", "Geen mailcontact met bekende vijanden")
+
     # zKillboard
     if with_zkill:
         zk = _zkill(eve_character.character_id)
@@ -430,9 +533,9 @@ def assess(eve_character, enemy, with_zkill=True):
             flag("ok", "success", "Vijand in historie", "Geen (corp + alliance gecheckt)")
         if hits["blue"]:
             bad += 1
-            flag("bad", "danger", "Vijand blauw in contacts", ", ".join(dict.fromkeys(hits["blue"])))
+            flag("bad", "danger", "Vijand als vriend gemarkeerd", ", ".join(dict.fromkeys(hits["blue"])))
         else:
-            flag("ok", "success", "Vijand blauw in contacts", "Geen")
+            flag("ok", "success", "Vijand als vriend gemarkeerd", "Geen")
         if hits["contracts"]:
             bad += 1
             flag("bad", "danger", "Contracten met vijand", ", ".join(dict.fromkeys(hits["contracts"])))

@@ -183,6 +183,22 @@
 .cs-app .cs-tabs .nav-link:hover { color: var(--cs-blue); }
 .cs-app .cs-tabs .nav-link.active { background-color: var(--cs-blue); color: #021016; }
 
+/* Mail-body (gescande mails) */
+.cs-app .cs-mail-body {
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: .8rem;
+    line-height: 1.5;
+    color: var(--cs-dim);
+    background: rgba(255, 255, 255, .025);
+    border: 1px solid var(--cs-border);
+    border-radius: 6px;
+    padding: .55rem .7rem;
+    margin-top: .35rem;
+    max-height: 240px;
+    overflow: auto;
+}
+
 /* Skills: details/summary */
 .cs-app details > summary { cursor: pointer; color: var(--cs-text); }
 .cs-app details > summary:hover { color: var(--cs-blue); }
