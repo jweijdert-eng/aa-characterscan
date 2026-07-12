@@ -1,0 +1,17 @@
+{% extends 'allianceauth/base-bs5.html' %}
+
+{% load i18n %}
+
+{% block page_title %}
+    {% translate "Character Scan" %}
+{% endblock %}
+
+{% block header_nav_brand %}
+    {% translate "Character Scan" %}
+{% endblock header_nav_brand %}
+
+{% block content %}
+    <div class="allianceauth-characterscan-plugin">
+        {% block details %}{% endblock %}
+    </div>
+{% endblock %}

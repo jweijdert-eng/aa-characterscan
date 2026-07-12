@@ -1,0 +1,64 @@
+{% extends 'characterscan/base.html' %}
+
+{% load i18n %}
+{% load humanize %}
+
+{% block details %}
+    <h2 class="mb-3">{% translate "Character Scan — Aanmelden" %}</h2>
+
+    {% if not main %}
+        <div class="alert alert-warning">
+            {% translate "Je hebt nog geen main character ingesteld in Alliance Auth. Stel er eerst één in." %}
+        </div>
+    {% else %}
+        <div class="card mb-3">
+            <div class="card-body d-flex align-items-center gap-3">
+                <img src="https://images.evetech.net/characters/{{ main.character_id }}/portrait?size=128"
+                     alt="" width="72" height="72" class="rounded-circle">
+                <div class="flex-grow-1">
+                    <div class="fs-5 fw-bold">{{ main.character_name }}</div>
+                    <div class="text-muted small">
+                        {% if main.corporation_id %}
+                            <img src="https://images.evetech.net/corporations/{{ main.corporation_id }}/logo?size=32"
+                                 alt="" width="16" height="16">
+                        {% endif %}
+                        {{ main.corporation_name }}{% if main.alliance_name %} · {{ main.alliance_name }}{% endif %}
+                    </div>
+                </div>
+                {% if recruit %}
+                    {% if recruit.status == "accepted" %}
+                        <span class="badge bg-success fs-6">{% translate "Aangenomen" %}</span>
+                    {% elif recruit.status == "rejected" %}
+                        <span class="badge bg-danger fs-6">{% translate "Afgewezen" %}</span>
+                    {% else %}
+                        <span class="badge bg-info fs-6">{% translate "In behandeling" %}</span>
+                    {% endif %}
+                {% endif %}
+            </div>
+        </div>
+
+        {% if stats and not stats.registered %}
+            <div class="alert alert-warning">
+                {% blocktranslate %}Koppel je character via <b>CharLink</b> zodat de recruiter je volledige profiel kan bekijken.{% endblocktranslate %}
+                <a href="/charlink/" class="alert-link">{% translate "Naar CharLink" %}</a>
+            </div>
+        {% endif %}
+
+        {% if recruit %}
+            <p class="text-muted">
+                {% blocktranslate with d=recruit.applied_at %}Je hebt je aangemeld op {{ d }}. Een recruiter bekijkt je aanmelding.{% endblocktranslate %}
+            </p>
+            <form method="post" action="{% url 'characterscan:apply' %}">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-outline-primary">{% translate "Gegevens verversen" %}</button>
+            </form>
+        {% else %}
+            <form method="post" action="{% url 'characterscan:apply' %}">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-primary btn-lg">
+                    {% translate "Aanmelden als recruit" %}
+                </button>
+            </form>
+        {% endif %}
+    {% endif %}
+{% endblock %}

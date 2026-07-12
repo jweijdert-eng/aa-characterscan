@@ -1,0 +1,440 @@
+"""
+Vetting — beoordeelt een recruit op basis van het canonieke data-dict (esi_fetch)
++ zKillboard.
+
+De vijandenlijst ("enemy set") = dict {entity_id: naam}, primair uit de corp+alliance-
+standings (automatisch), met een handmatige aanvulling en een MA-fallback.
+"""
+
+from datetime import datetime, timedelta
+from datetime import timezone as dt_timezone
+
+import requests
+
+from django.conf import settings
+from django.core.cache import cache
+from django.utils import timezone
+
+from .esi_fetch import get_profile, ma_character
+
+UA = {"User-Agent": "aa-characterscan (local eval)"}
+
+VERDICTS = {
+    "bad": {"level": "bad", "label": "VERDACHT", "css": "danger", "icon": "⛔"},
+    "warn": {"level": "warn", "label": "CONTROLEER", "css": "warning", "icon": "⚠"},
+    "ok": {"level": "ok", "label": "VEILIG", "css": "success", "icon": "✓"},
+}
+
+CORP_CONTACTS_SCOPE = "esi-corporations.read_contacts.v1"
+ALLIANCE_CONTACTS_SCOPE = "esi-alliances.read_contacts.v1"
+
+
+# ── Datum/ISK-helpers ────────────────────────────────────────────────────────
+def _parse_date(v):
+    """datetime of ISO-string → aware datetime (of None)."""
+    if not v:
+        return None
+    if isinstance(v, str):
+        try:
+            v = datetime.fromisoformat(v.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    if timezone.is_naive(v):
+        v = v.replace(tzinfo=dt_timezone.utc)
+    return v
+
+
+def _fmt_date(v):
+    d = _parse_date(v)
+    return d.strftime("%d-%m-%Y") if d else "?"
+
+
+def _fmt_isk(v):
+    v = float(v)
+    a, sign = abs(v), "-" if v < 0 else ""
+    if a >= 1e12:
+        return f"{sign}{a/1e12:.2f}T"
+    if a >= 1e9:
+        return f"{sign}{a/1e9:.2f}B"
+    if a >= 1e6:
+        return f"{sign}{a/1e6:.1f}M"
+    if a >= 1e3:
+        return f"{sign}{a/1e3:.0f}K"
+    return f"{sign}{a:.0f}"
+
+
+# ── Gedeelde ESI-helpers (voor de org-standings) ─────────────────────────────
+def _esi_paged(path, token_str):
+    out, page = [], 1
+    while True:
+        try:
+            r = requests.get(
+                f"https://esi.evetech.net/latest{path}?datasource=tranquility&page={page}",
+                headers={**UA, "Authorization": f"Bearer {token_str}"}, timeout=8,
+            )
+        except Exception:
+            break
+        if not r.ok:
+            break
+        chunk = r.json() or []
+        out.extend(chunk)
+        if page >= int(r.headers.get("X-Pages", 1) or 1) or not chunk:
+            break
+        page += 1
+    return out
+
+
+def _resolve_names(ids):
+    names, ids = {}, [i for i in ids if i]
+    for i in range(0, len(ids), 1000):
+        try:
+            r = requests.post(
+                "https://esi.evetech.net/latest/universe/names/?datasource=tranquility",
+                json=ids[i:i + 1000], headers=UA, timeout=8,
+            )
+            if r.ok:
+                for x in r.json():
+                    names[x["id"]] = x["name"]
+        except Exception:
+            pass
+    return names
+
+
+def _is_npc_corp(corp_id):
+    """Player-corps hebben een id >= 98.000.000; daaronder = NPC-corp."""
+    return corp_id is None or corp_id < 98_000_000
+
+
+def corp_alliance(corp_id):
+    """Huidige alliance-id van een player-corp (publieke ESI, gecached). None = geen."""
+    if _is_npc_corp(corp_id):
+        return None
+    key = f"cs_corp_alliance_{corp_id}"
+    cached = cache.get(key)
+    if cached is not None:
+        return cached or None
+    alliance_id = None
+    try:
+        r = requests.get(
+            f"https://esi.evetech.net/latest/corporations/{corp_id}/?datasource=tranquility",
+            headers=UA, timeout=6,
+        )
+        if r.ok:
+            alliance_id = r.json().get("alliance_id")
+    except Exception:
+        pass
+    cache.set(key, alliance_id or 0, 7 * 86400)
+    return alliance_id
+
+
+# ── Vijandenlijst (org corp/alliance-standings) ──────────────────────────────
+def standings_token_exists():
+    try:
+        from esi.models import Token
+        return Token.objects.filter(
+            scopes__name__in=[CORP_CONTACTS_SCOPE, ALLIANCE_CONTACTS_SCOPE]
+        ).exists()
+    except Exception:
+        return False
+
+
+def org_enemy_ids(force=False):
+    """Dict {id: naam} van rode entiteiten uit de CORP + ALLIANCE-standings (automatisch)."""
+    key = "cs_org_enemies"
+    if not force:
+        cached = cache.get(key)
+        if cached is not None:
+            return dict(cached)
+
+    from esi.models import Token
+    from allianceauth.eveonline.models import EveCharacter
+
+    enemies = set()
+    corp_override = getattr(settings, "CHARACTERSCAN_STANDINGS_CORP_ID", None)
+    ally_override = getattr(settings, "CHARACTERSCAN_STANDINGS_ALLIANCE_ID", None)
+
+    def _corp(cid):
+        ec = EveCharacter.objects.filter(character_id=cid).first()
+        return ec.corporation_id if ec else None
+
+    def _ally(cid):
+        ec = EveCharacter.objects.filter(character_id=cid).first()
+        return ec.alliance_id if ec else None
+
+    for t in Token.objects.filter(scopes__name=CORP_CONTACTS_SCOPE):
+        corp_id = corp_override or _corp(t.character_id)
+        if not corp_id or corp_id < 98_000_000:
+            continue
+        try:
+            rows = _esi_paged(f"/corporations/{corp_id}/contacts/", t.valid_access_token())
+        except Exception:
+            rows = []
+        if rows:
+            enemies.update(c["contact_id"] for c in rows if c.get("standing", 0) < 0)
+            break
+
+    for t in Token.objects.filter(scopes__name=ALLIANCE_CONTACTS_SCOPE):
+        alliance_id = ally_override or _ally(t.character_id)
+        if not alliance_id:
+            continue
+        try:
+            rows = _esi_paged(f"/alliances/{alliance_id}/contacts/", t.valid_access_token())
+        except Exception:
+            rows = []
+        if rows:
+            enemies.update(c["contact_id"] for c in rows if c.get("standing", 0) < 0)
+            break
+
+    names = _resolve_names(enemies) if enemies else {}
+    result = {eid: names.get(eid, f"#{eid}") for eid in enemies}
+    cache.set(key, result, 3600)
+    return result
+
+
+def enemy_set(recruiter_eve_character=None):
+    """Dict {id: naam} vijandige entiteiten — automatisch uit corp/alliance-standings."""
+    enemy = dict(org_enemy_ids())
+
+    for eid in getattr(settings, "CHARACTERSCAN_ENEMY_IDS", None) or []:
+        try:
+            enemy.setdefault(int(eid), f"#{int(eid)}")
+        except (TypeError, ValueError):
+            pass
+
+    if not enemy and recruiter_eve_character:  # fallback: persoonlijke MA-contacts
+        ma = ma_character(recruiter_eve_character)
+        if ma:
+            try:
+                for c in ma.contacts.select_related("eve_entity").filter(standing__lt=0):
+                    enemy[c.eve_entity_id] = getattr(c.eve_entity, "name", f"#{c.eve_entity_id}")
+            except Exception:
+                pass
+    return enemy
+
+
+# ── Analyse op het canonieke data-dict ───────────────────────────────────────
+def enemy_hits(profile, enemy):
+    """Bad-signalen tegen de vijandenlijst (corp + alliance, huidig + historisch)."""
+    hits = {"current": [], "history": [], "blue": [], "contracts": []}
+    if not enemy:
+        return hits
+
+    if profile.get("corp_id") in enemy:
+        hits["current"].append(f"corp {enemy[profile['corp_id']]}")
+    if profile.get("alliance_id") and profile["alliance_id"] in enemy:
+        hits["current"].append(f"alliance {enemy[profile['alliance_id']]}")
+
+    seen = set()
+    for h in profile.get("corp_history", []):
+        cid = h.get("corp_id")
+        if not cid or cid in seen:
+            continue
+        seen.add(cid)
+        if cid in enemy:
+            hits["history"].append(h.get("corp_name", str(cid)))
+        elif h.get("alliance_id") and h["alliance_id"] in enemy:
+            hits["history"].append(f"{h.get('corp_name', cid)} (alliance {enemy[h['alliance_id']]})")
+
+    for c in profile.get("contacts", []):
+        if c.get("standing", 0) > 0 and c.get("id") in enemy:
+            hits["blue"].append(c.get("name", str(c.get("id"))))
+
+    for c in profile.get("contracts", []):
+        parties = [c.get("issuer_id"), c.get("issuer_corp_id"), c.get("assignee_id"), c.get("acceptor_id")]
+        if any(p in enemy for p in parties if p):
+            hits["contracts"].append(c.get("title") or c.get("type") or "contract")
+
+    return hits
+
+
+def wallet_flags(profile, enemy):
+    """Scan de wallet-journal op grote/verdachte ISK-bewegingen. → (flags, bad, warn)."""
+    threshold = float(getattr(settings, "CHARACTERSCAN_WALLET_ALERT_ISK", 1_000_000_000))
+    flags, bad, warn = [], 0, 0
+    journal = profile.get("wallet_journal", [])
+    if not journal:
+        return flags, bad, warn
+
+    def cp(j):
+        # tegenpartij = de partij die niet het character zelf is
+        for pid, name in ((j.get("first_party_id"), j.get("first_party_name")),
+                          (j.get("second_party_id"), j.get("second_party_name"))):
+            if pid and pid != profile.get("character_id"):
+                return name or f"#{pid}"
+        return "?"
+
+    big_don = [j for j in journal
+               if j.get("ref_type") == "player_donation" and j.get("amount") and abs(float(j["amount"])) >= threshold]
+    incoming = [j for j in big_don if float(j["amount"]) > 0]
+    outgoing = [j for j in big_don if float(j["amount"]) < 0]
+    if incoming:
+        warn += 1
+        items = [f"{_fmt_isk(j['amount'])} ISK van <b>{cp(j)}</b> ({_fmt_date(j.get('date'))})" for j in incoming[:5]]
+        flags.append({"level": "warn", "css": "warning", "text": "Grote inkomende ISK-donaties: " + "; ".join(items)})
+    if outgoing:
+        items = [f"{_fmt_isk(abs(float(j['amount'])))} ISK naar <b>{cp(j)}</b> ({_fmt_date(j.get('date'))})" for j in outgoing[:5]]
+        flags.append({"level": "info", "css": "secondary", "text": "Grote uitgaande ISK-donaties: " + "; ".join(items)})
+
+    if enemy:
+        hits = []
+        for j in journal:
+            for pid, name in ((j.get("first_party_id"), j.get("first_party_name")),
+                              (j.get("second_party_id"), j.get("second_party_name"))):
+                if pid and pid in enemy and j.get("amount"):
+                    hits.append(f"{_fmt_isk(j['amount'])} ISK ↔ <b>{enemy[pid]}</b> ({(j.get('ref_type') or '').replace('_', ' ')})")
+                    break
+        if hits:
+            bad += 1
+            flags.append({"level": "bad", "css": "danger",
+                          "text": "ISK-transacties met vijand(en): " + "; ".join(list(dict.fromkeys(hits))[:6])})
+
+    biggest = max(journal, key=lambda j: abs(float(j.get("amount") or 0)))
+    if biggest.get("amount") and abs(float(biggest["amount"])) >= threshold and not big_don:
+        flags.append({"level": "info", "css": "secondary",
+                      "text": f"Grootste transactie: {_fmt_isk(biggest['amount'])} ISK "
+                              f"({(biggest.get('ref_type') or '').replace('_', ' ')}, {_fmt_date(biggest.get('date'))})."})
+    return flags, bad, warn
+
+
+def _zkill(character_id):
+    try:
+        r = requests.get(f"https://zkillboard.com/api/stats/characterID/{character_id}/",
+                         headers=UA, timeout=8)
+        if r.ok:
+            return r.json()
+    except Exception:
+        pass
+    return None
+
+
+def quick_verdict(eve_character, enemy):
+    """Lichte verdict voor de lijst (geen zKill)."""
+    profile = get_profile(eve_character)
+    if not profile.get("ok"):
+        return {"level": "ok", "label": "?", "css": "secondary", "icon": "·"}
+    if any(enemy_hits(profile, enemy).values()):
+        return VERDICTS["bad"]
+    if profile.get("risk_skills"):
+        return VERDICTS["warn"]
+    return VERDICTS["ok"]
+
+
+def assess(eve_character, enemy, with_zkill=True):
+    """Volledige vetting voor de detailpagina: verdict + lijst van flags."""
+    profile = get_profile(eve_character)
+    flags = []
+    if not profile.get("ok"):
+        return {"verdict": {"level": "ok", "label": "GEEN DATA", "css": "secondary", "icon": "·"},
+                "flags": [{"level": "info", "css": "secondary", "text":
+                           "Geen data — recruit heeft nog geen character gekoppeld via CharLink."}]}
+
+    bad = warn = 0
+
+    # Risk-skills
+    risk = profile.get("risk_skills", [])
+    if risk:
+        warn += 1
+        by_label = {}
+        for s in risk:
+            by_label.setdefault(s["label"], []).append(f"{s['name']} L{s['level']}")
+        txt = " · ".join(f"<b>{k}</b> ({', '.join(v)})" for k, v in by_label.items())
+        flags.append({"level": "warn", "css": "warning", "text": f"Risk-skills: {txt}"})
+    else:
+        flags.append({"level": "ok", "css": "success", "text": "Geen cyno/covert/blops/recon/jump-skills."})
+
+    # Leeftijd
+    age = profile.get("age_years")
+    if age is not None:
+        if age < 0.1:
+            bad += 1
+            flags.append({"level": "bad", "css": "danger",
+                          "text": f"<b>Zeer jong character</b> ({int(age*365)} dagen) — mogelijk wegwerp-/spy-alt."})
+        elif age < 0.5:
+            warn += 1
+            flags.append({"level": "warn", "css": "warning", "text": f"Jong character ({age} jaar) — extra check waard."})
+        else:
+            flags.append({"level": "ok", "css": "success", "text": f"Leeftijd: {age} jaar."})
+
+    # Corp-hopping (player-corps; NPC al gefilterd in de fetch)
+    hist = sorted(
+        [h for h in profile.get("corp_history", []) if _parse_date(h.get("start"))],
+        key=lambda h: _parse_date(h["start"]),
+    )
+    if hist:
+        year_ago = timezone.now() - timedelta(days=365)
+        recent = [h for h in hist if _parse_date(h["start"]) > year_ago]
+        short = 0
+        for i, h in enumerate(hist):
+            end = _parse_date(hist[i + 1]["start"]) if i + 1 < len(hist) else timezone.now()
+            if (end - _parse_date(h["start"])).days < 14:
+                short += 1
+        if len(recent) >= 5:
+            warn += 1
+            flags.append({"level": "warn", "css": "warning",
+                          "text": f"<b>Corp-hopping</b>: {len(recent)} player-corps in de laatste 12 maanden."})
+        elif short >= 3:
+            warn += 1
+            flags.append({"level": "warn", "css": "warning",
+                          "text": f"<b>Korte corp-stints</b>: {short}× een player-corp binnen 14 dagen verlaten."})
+        else:
+            flags.append({"level": "ok", "css": "success",
+                          "text": f"Stabiele werkgevershistorie ({len(hist)} player-corps)."})
+
+    # Sec + SP
+    sec = profile.get("sec")
+    if sec is not None and sec < -2:
+        warn += 1
+        flags.append({"level": "warn", "css": "warning", "text": f"Negatieve security status: {sec:.1f}."})
+    sp = profile.get("total_sp")
+    if sp is not None and sp < 5_000_000:
+        flags.append({"level": "info", "css": "secondary", "text": f"Lage skillpoints ({sp/1e6:.1f}M SP) — relatief nieuw character."})
+
+    # Wallet-scan
+    w_flags, w_bad, w_warn = wallet_flags(profile, enemy)
+    bad += w_bad
+    warn += w_warn
+    flags.extend(w_flags)
+
+    # zKillboard
+    if with_zkill:
+        zk = _zkill(eve_character.character_id)
+        if zk:
+            destroyed = zk.get("shipsDestroyed", 0) or 0
+            lost = zk.get("shipsLost", 0) or 0
+            danger = zk.get("dangerRatio", 0)
+            solo = zk.get("soloKills", 0) or 0
+            if destroyed + lost == 0:
+                flags.append({"level": "info", "css": "secondary", "text": "Geen PvP-historie op zKillboard."})
+            else:
+                flags.append({"level": "info", "css": "secondary",
+                              "text": f"zKill: <b>{destroyed}</b> kills / <b>{lost}</b> losses · danger {danger}% · {solo} solo."})
+        else:
+            flags.append({"level": "info", "css": "secondary", "text": "zKillboard-historie kon niet geladen worden."})
+
+    # Vijand-checks
+    if not enemy:
+        flags.append({"level": "info", "css": "secondary",
+                      "text": "Geen vijandenlijst geladen. Vijand-checks overgeslagen."})
+    else:
+        hits = enemy_hits(profile, enemy)
+        if hits["current"]:
+            bad += 1
+            flags.append({"level": "bad", "css": "danger", "text": "Zit nu in vijandige " + ", ".join(hits["current"])})
+        if hits["history"]:
+            bad += 1
+            flags.append({"level": "bad", "css": "danger", "text": "Historie bevat vijand(en): " + ", ".join(dict.fromkeys(hits["history"]))})
+        else:
+            flags.append({"level": "ok", "css": "success", "text": "Geen vijanden in werkgevershistorie (corp + alliance gecheckt)."})
+        if hits["blue"]:
+            bad += 1
+            flags.append({"level": "bad", "css": "danger", "text": "Heeft vijand(en) blauw in contacts: " + ", ".join(dict.fromkeys(hits["blue"]))})
+        else:
+            flags.append({"level": "ok", "css": "success", "text": "Geen vijanden blauw in contacts."})
+        if hits["contracts"]:
+            bad += 1
+            flags.append({"level": "bad", "css": "danger", "text": "Contracten met vijand(en): " + ", ".join(dict.fromkeys(hits["contracts"]))})
+        else:
+            flags.append({"level": "ok", "css": "success", "text": "Geen contracten met bekende vijanden."})
+
+    verdict = VERDICTS["bad"] if bad else VERDICTS["warn"] if warn else VERDICTS["ok"]
+    return {"verdict": verdict, "flags": flags}

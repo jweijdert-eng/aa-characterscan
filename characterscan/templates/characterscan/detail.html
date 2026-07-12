@@ -1,0 +1,159 @@
+{% extends 'characterscan/base.html' %}
+
+{% load i18n %}
+{% load humanize %}
+
+{% block details %}
+    {% with c=recruit.eve_character s=profile.stats %}
+    <a href="{% url 'characterscan:recruiter_list' %}" class="btn btn-outline-secondary btn-sm mb-3">← {% translate "Terug naar lijst" %}</a>
+
+    {# Header #}
+    <div class="card mb-3">
+        <div class="card-body d-flex align-items-center gap-3">
+            <img src="https://images.evetech.net/characters/{{ c.character_id }}/portrait?size=128"
+                 alt="" width="72" height="72" class="rounded-circle">
+            <div class="flex-grow-1">
+                <div class="fs-4 fw-bold">{{ c.character_name }}</div>
+                <div class="text-muted">
+                    {% if c.corporation_id %}
+                        <img src="https://images.evetech.net/corporations/{{ c.corporation_id }}/logo?size=32" alt="" width="18" height="18">
+                    {% endif %}
+                    {{ c.corporation_name }}{% if c.alliance_name %} · {{ c.alliance_name }}{% endif %}
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                <form method="post" action="{% url 'characterscan:recruit_action' recruit.pk %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="accepted">
+                    <input type="hidden" name="next" value="{% url 'characterscan:recruit_detail' recruit.pk %}">
+                    <button class="btn btn-success btn-sm">✓ {% translate "Aannemen" %}</button>
+                </form>
+                <form method="post" action="{% url 'characterscan:recruit_action' recruit.pk %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="rejected">
+                    <input type="hidden" name="next" value="{% url 'characterscan:recruit_detail' recruit.pk %}">
+                    <button class="btn btn-outline-danger btn-sm">✕ {% translate "Afwijzen" %}</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    {% if not profile.registered %}
+        <div class="alert alert-warning">
+            {% blocktranslate %}Geen data — dit character is nog niet via CharLink gekoppeld.{% endblocktranslate %}
+        </div>
+    {% endif %}
+
+    {# Vetting #}
+    <div class="card mb-3">
+        <div class="card-header">🛡 {% translate "Vetting" %}</div>
+        <div class="card-body">
+            <div class="alert alert-{{ vetting.verdict.css }} text-center fw-bold fs-5 py-2">
+                {{ vetting.verdict.icon }} {{ vetting.verdict.label }}
+            </div>
+            {% for f in vetting.flags %}
+                <div class="alert alert-{{ f.css }} py-2 mb-2 small">{{ f.text|safe }}</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="row g-3">
+        {# Overzicht #}
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header">📋 {% translate "Overzicht" %}</div>
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item d-flex justify-content-between"><span class="text-muted">{% translate "Sec status" %}</span><span>{{ s.sec|default_if_none:"?"|floatformat:2 }}</span></li>
+                    <li class="list-group-item d-flex justify-content-between"><span class="text-muted">{% translate "Leeftijd" %}</span><span>{% if s.age_years != None %}{{ s.age_years }} {% translate "jaar" %}{% else %}?{% endif %}</span></li>
+                    <li class="list-group-item d-flex justify-content-between"><span class="text-muted">{% translate "Wallet" %}</span><span>{% if s.wallet != None %}{{ s.wallet|intword }} ISK{% else %}🔒{% endif %}</span></li>
+                    <li class="list-group-item d-flex justify-content-between"><span class="text-muted">{% translate "Skillpoints" %}</span><span>{% if s.total_sp != None %}{{ s.total_sp|intword }} SP{% else %}?{% endif %}</span></li>
+                </ul>
+            </div>
+        </div>
+
+        {# Werkgevershistorie #}
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header">🏛 {% translate "Corp-historie" %}</div>
+                <ul class="list-group list-group-flush" style="max-height:320px;overflow:auto">
+                    {% for h in profile.corp_history %}
+                        <li class="list-group-item d-flex justify-content-between {% if h.is_enemy %}list-group-item-danger{% endif %}">
+                            <span class="{% if h.is_enemy %}text-danger fw-bold{% endif %}">{% if h.is_enemy %}⚠ {% endif %}{{ h.corp_name }}</span>
+                            <span class="text-muted small">{{ h.start|date:"d M Y" }}</span>
+                        </li>
+                    {% empty %}
+                        <li class="list-group-item text-muted">{% translate "Geen historie." %}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+
+        {# Skills gegroepeerd #}
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">◎ {% translate "Skills" %}</div>
+                <div class="card-body">
+                    {% for g in profile.skill_groups %}
+                        <details class="mb-2">
+                            <summary class="fw-bold">{{ g.name }}
+                                <span class="text-muted small">— {{ g.count }} skills · {{ g.total_sp|intword }} SP</span>
+                            </summary>
+                            <ul class="list-group list-group-flush mt-1">
+                                {% for sk in g.skills %}
+                                    <li class="list-group-item d-flex justify-content-between py-1">
+                                        <span>{{ sk.name }}</span>
+                                        <span class="text-muted small">Lvl {{ sk.level }} · {{ sk.sp|intword }} SP</span>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        </details>
+                    {% empty %}
+                        <div class="text-muted">{% translate "Geen skills beschikbaar." %}</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        {# Contacts + Contracts #}
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header">⚖ {% translate "Contacts" %}</div>
+                <ul class="list-group list-group-flush" style="max-height:320px;overflow:auto">
+                    {% for ct in profile.contacts %}
+                        <li class="list-group-item d-flex justify-content-between {% if ct.is_enemy and ct.standing > 0 %}list-group-item-danger{% endif %}">
+                            <span class="{% if ct.is_enemy %}text-danger fw-bold{% endif %}">{% if ct.is_enemy %}⚠ {% endif %}{{ ct.name }}</span>
+                            <span class="{% if ct.standing > 0 %}text-success{% elif ct.standing < 0 %}text-danger{% else %}text-muted{% endif %}">{{ ct.standing|floatformat:1 }}</span>
+                        </li>
+                    {% empty %}
+                        <li class="list-group-item text-muted">{% translate "Geen contacts." %}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header">◧ {% translate "Contracts" %}</div>
+                <ul class="list-group list-group-flush" style="max-height:360px;overflow:auto">
+                    {% for ct in profile.contracts %}
+                        <li class="list-group-item {% if ct.is_enemy %}list-group-item-danger{% endif %}">
+                            <div class="d-flex justify-content-between">
+                                <span class="fw-semibold">{% if ct.is_enemy %}⚠ {% endif %}{{ ct.type }}{% if ct.title %} — {{ ct.title }}{% endif %}</span>
+                                <span class="text-muted small">{{ ct.status }} · {{ ct.date|date:"d M y" }}</span>
+                            </div>
+                            {% if ct.issuer or ct.assignee or ct.acceptor %}
+                                <div class="small text-muted">
+                                    {% if ct.issuer %}{% translate "van" %} <span class="{% if ct.issuer_enemy %}text-danger fw-bold{% else %}text-body{% endif %}">{{ ct.issuer }}</span>{% if ct.issuer_corp %} [{{ ct.issuer_corp }}]{% endif %}{% endif %}
+                                    {% if ct.assignee %} → <span class="{% if ct.assignee_enemy %}text-danger fw-bold{% else %}text-body{% endif %}">{{ ct.assignee }}</span>{% if ct.assignee_cat %} <span class="badge bg-secondary">{{ ct.assignee_cat }}</span>{% endif %}{% endif %}
+                                    {% if ct.acceptor %} · {% translate "geaccepteerd door" %} <span class="{% if ct.acceptor_enemy %}text-danger fw-bold{% else %}text-body{% endif %}">{{ ct.acceptor }}</span>{% endif %}
+                                </div>
+                            {% endif %}
+                        </li>
+                    {% empty %}
+                        <li class="list-group-item text-muted">{% translate "Geen contracts." %}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+    {% endwith %}
+{% endblock %}

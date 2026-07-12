@@ -1,0 +1,95 @@
+{% extends 'characterscan/base.html' %}
+
+{% load i18n %}
+{% load humanize %}
+
+{% block details %}
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <h2 class="mb-0">{% translate "Aanmeldingen" %}</h2>
+        {% if needs_standings_grant %}
+            <a href="{% url 'characterscan:grant_standings' %}" class="btn btn-outline-info btn-sm"
+               title="{% translate 'Eenmalig autoriseren; daarna gaat het automatisch' %}">
+                🛡 {% translate "Corp/alliance-standings activeren (eenmalig)" %}
+            </a>
+        {% endif %}
+    </div>
+
+    {# Stats-filters #}
+    <div class="d-flex gap-2 flex-wrap mb-3">
+        {% for f in filters %}
+            <a href="?status={{ f.key }}"
+               class="btn {% if status == f.key %}btn-primary{% else %}btn-outline-secondary{% endif %} btn-sm">
+                {{ f.label }} <span class="badge bg-dark ms-1">{{ f.count }}</span>
+            </a>
+        {% endfor %}
+    </div>
+
+    {% if not recruits %}
+        <div class="alert alert-secondary">{% translate "Geen aanmeldingen die aan het filter voldoen." %}</div>
+    {% else %}
+        <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-3">
+            {% for item in recruits %}
+                {% with r=item.recruit s=item.stats v=item.verdict %}
+                    <div class="col">
+                        <div class="card h-100 border-{{ v.css }}">
+                            <div class="card-body d-flex gap-3">
+                                <a href="{% url 'characterscan:recruit_detail' r.pk %}">
+                                    <img src="https://images.evetech.net/characters/{{ r.eve_character.character_id }}/portrait?size=64"
+                                         alt="" width="56" height="56" class="rounded-circle">
+                                </a>
+                                <div class="flex-grow-1" style="min-width:0">
+                                    <div class="fw-bold">
+                                        <span class="badge bg-{{ v.css }}" title="{{ v.label }}">{{ v.icon }}</span>
+                                        <a href="{% url 'characterscan:recruit_detail' r.pk %}" class="text-decoration-none">
+                                            {{ r.eve_character.character_name }}
+                                        </a>
+                                        {% if r.status == "accepted" %}
+                                            <span class="badge bg-success">{% translate "Aangenomen" %}</span>
+                                        {% elif r.status == "rejected" %}
+                                            <span class="badge bg-danger">{% translate "Afgewezen" %}</span>
+                                        {% else %}
+                                            <span class="badge bg-info">{% translate "Nieuw" %}</span>
+                                        {% endif %}
+                                    </div>
+                                    <div class="text-muted small">
+                                        {{ s.corp_name }}{% if s.alliance_name %} · {{ s.alliance_name }}{% endif %}
+                                    </div>
+                                    {% if s.is_alt %}
+                                        <div class="small"><span class="badge bg-secondary">alt van {{ s.owner_main }}</span></div>
+                                    {% endif %}
+                                    <div class="text-muted small mt-1">
+                                        {% translate "sec" %} {{ s.sec|default_if_none:"?"|floatformat:1 }} ·
+                                        {{ s.age_years|default_if_none:"?" }}{% translate "j" %} ·
+                                        {% if s.wallet != None %}{{ s.wallet|intword }} ISK{% else %}🔒{% endif %} ·
+                                        {% if s.total_sp != None %}{{ s.total_sp|intword }} SP{% else %}?{% endif %}
+                                    </div>
+                                    {% if not s.registered %}
+                                        <div class="small text-warning mt-1">{% translate "niet in Member Audit" %}</div>
+                                    {% endif %}
+                                    <div class="d-flex gap-1 mt-2">
+                                        <form method="post" action="{% url 'characterscan:recruit_action' r.pk %}">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="accepted">
+                                            <button class="btn btn-outline-success btn-sm">✓</button>
+                                        </form>
+                                        <form method="post" action="{% url 'characterscan:recruit_action' r.pk %}">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="rejected">
+                                            <button class="btn btn-outline-danger btn-sm">✕</button>
+                                        </form>
+                                        <form method="post" action="{% url 'characterscan:recruit_action' r.pk %}"
+                                              onsubmit="return confirm('{% translate "Aanmelding verwijderen?" %}');">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="delete">
+                                            <button class="btn btn-outline-secondary btn-sm">🗑</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% endwith %}
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endblock %}
