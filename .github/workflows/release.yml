@@ -1,52 +1,56 @@
-# Release to PyPI using Trusted Publishing
-# This workflow is triggered when a release is published on GitHub.
-#
-# https://docs.pypi.org/trusted-publishers/
-# https://docs.pypi.org/trusted-publishers/adding-a-publisher/
-# https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/
-# https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments
+# Maakt automatisch een tag + GitHub Release zodra de versie in
+# characterscan/__init__.py omhoog gaat en je naar main pusht.
+# De gebouwde wheel + sdist worden aan de release gehangen.
 
-name: Release
+name: Auto Release
 
 on:
-  release:
-    # https://docs.github.com/en/actions/reference/events-that-trigger-workflows#release
-    types: [released, prereleased]
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
 
 jobs:
   release:
-    # Release
-    name: Release
+    name: Auto Release
     runs-on: ubuntu-latest
-    environment:
-      name: pypi-release
-    permissions:
-      id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
-      contents: write
-
     steps:
-      # Checkout the repository
       - name: Checkout
-        uses: actions/checkout@v7
-
-      # Set up Python
-      - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/checkout@v4
         with:
-          python-version-file: 'pyproject.toml' # Read the Python version from the pyproject.toml file
+          fetch-depth: 0
 
-      # Install Tools
-      - name: Install Tools
+      - name: Lees versie + check of de tag al bestaat
+        id: version
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install --upgrade build
-          python -m pip install --upgrade setuptools wheel
+          VERSION=$(grep -oE '__version__ = "[^"]+"' characterscan/__init__.py | cut -d'"' -f2)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "exists=yes" >> "$GITHUB_OUTPUT"
+            echo "Tag v$VERSION bestaat al — geen nieuwe release."
+          else
+            echo "exists=no" >> "$GITHUB_OUTPUT"
+            echo "Nieuwe versie: v$VERSION"
+          fi
 
-      # Build Package
-      - name: Package
+      - name: Set up Python
+        if: steps.version.outputs.exists == 'no'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Bouw wheel + sdist
+        if: steps.version.outputs.exists == 'no'
         run: |
+          python -m pip install --upgrade pip build
           python -m build
 
-      # Publish to PyPI using Trusted Publishing
-      - name: Upload to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+      - name: Maak tag + release
+        if: steps.version.outputs.exists == 'no'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Character Scan ${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          files: dist/*
