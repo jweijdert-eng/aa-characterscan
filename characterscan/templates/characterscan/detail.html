@@ -80,9 +80,17 @@
                 <div class="card-header">🏛 {% translate "Corp-historie" %}</div>
                 <ul class="list-group list-group-flush" style="max-height:320px;overflow:auto">
                     {% for h in profile.corp_history %}
-                        <li class="list-group-item d-flex justify-content-between {% if h.is_enemy %}list-group-item-danger{% endif %}">
-                            <span class="{% if h.is_enemy %}text-danger fw-bold{% endif %}">{% if h.is_enemy %}⚠ {% endif %}{{ h.corp_name }}</span>
-                            <span class="text-muted small">{{ h.start|date:"d M Y" }}</span>
+                        <li class="list-group-item {% if h.is_enemy %}list-group-item-danger{% endif %}">
+                            <div class="d-flex justify-content-between align-items-center gap-2">
+                                <span class="cs-org {% if h.is_enemy %}text-danger fw-bold{% endif %}">
+                                    {% if h.is_enemy %}⚠ {% endif %}
+                                    {% if h.corp_id %}<img src="https://images.evetech.net/corporations/{{ h.corp_id }}/logo?size=32" alt="" class="cs-org-logo">{% endif %}
+                                    {% if h.alliance_id %}<img src="https://images.evetech.net/alliances/{{ h.alliance_id }}/logo?size=32" alt="" class="cs-org-logo" title="{% translate 'alliance' %}">{% endif %}
+                                    <span>{{ h.corp_name }}</span>{% if h.is_current %} <span class="badge bg-info">{% translate "huidig" %}</span>{% endif %}
+                                </span>
+                                {% if h.duration_label %}<span class="cs-dur {% if h.duration_days < 14 %}cs-dur-short{% endif %}" title="{{ h.duration_days }} {% translate 'dagen' %}">{{ h.duration_label }}</span>{% endif %}
+                            </div>
+                            <div class="text-muted small">{{ h.start_dt|date:"d M Y" }} – {% if h.end_dt %}{{ h.end_dt|date:"d M Y" }}{% else %}{% translate "nu" %}{% endif %}</div>
                         </li>
                     {% empty %}
                         <li class="list-group-item text-muted">{% translate "Geen historie." %}</li>

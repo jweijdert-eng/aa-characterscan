@@ -66,6 +66,19 @@ def _risk_label(name):
     return None
 
 
+def _fmt_duration(days):
+    """Aantal dagen → compacte NL-looptijd (bijv. '2j 3m', '5 mnd', '12 dagen')."""
+    if days is None or days < 0:
+        return ""
+    if days < 60:
+        return f"{days} dag" + ("" if days == 1 else "en")
+    if days < 365:
+        return f"{days // 30} mnd"
+    y, rem = divmod(days, 365)
+    m = rem // 30
+    return f"{y}j" + (f" {m}m" if m else "")
+
+
 def _age_years(birthday):
     if not birthday:
         return None
@@ -313,20 +326,37 @@ def _fetch_live(eve_character, token):
     } for m, body in zip(recent_mails, bodies)]
 
     # Corp-historie + alliance per corp (alliance-lookups parallel)
-    from .vetting import corp_alliance  # hergebruik gecachte lookup
+    from .vetting import corp_alliance, _parse_date  # hergebruik gecachte lookup
+    # Einddatum van elke stint = start van de volgende corp in de VOLLEDIGE historie
+    # (incl. NPC-corps), zodat de looptijd klopt ook als er NPC-corps tussen zaten.
+    full_asc = sorted(hist_raw, key=lambda x: x["start_date"])
+    end_by_start = {h["start_date"]: (full_asc[i + 1]["start_date"] if i + 1 < len(full_asc) else None)
+                    for i, h in enumerate(full_asc)}
     player_hist = [h for h in sorted(hist_raw, key=lambda x: x["start_date"], reverse=True)
-                   if h["corporation_id"] >= 98_000_000]  # NPC-corps eruit
+                   if h["corporation_id"] >= 98_000_000]  # NPC-corps eruit (weergave)
     alliance_map = _parallel(
         {h["corporation_id"]: (lambda c=h["corporation_id"]: corp_alliance(c)) for h in player_hist},
         max_workers=8,
     )
-    corp_history = [{
-        "corp_id": h["corporation_id"],
-        "corp_name": name_map.get(h["corporation_id"], str(h["corporation_id"])),
-        "alliance_id": alliance_map.get(h["corporation_id"]),
-        "start": h["start_date"],
-        "is_deleted": h.get("is_deleted", False),
-    } for h in player_hist]
+    now = timezone.now()
+    corp_history = []
+    for h in player_hist:
+        start_dt = _parse_date(h["start_date"])
+        end_raw = end_by_start.get(h["start_date"])
+        end_dt = _parse_date(end_raw) if end_raw else None
+        days = ((end_dt or now) - start_dt).days if start_dt else None
+        corp_history.append({
+            "corp_id": h["corporation_id"],
+            "corp_name": name_map.get(h["corporation_id"], str(h["corporation_id"])),
+            "alliance_id": alliance_map.get(h["corporation_id"]),
+            "start": h["start_date"],
+            "start_dt": start_dt,
+            "end_dt": end_dt,
+            "duration_days": days,
+            "duration_label": _fmt_duration(days),
+            "is_current": end_raw is None,
+            "is_deleted": h.get("is_deleted", False),
+        })
 
     skill_list = [{"skill_id": s["skill_id"],
                    "skillpoints_in_skill": s.get("skillpoints_in_skill", 0),
@@ -442,14 +472,26 @@ def _fetch_memberaudit(eve_character):
 
     corp_history = []
     try:
-        for h in ma.corporation_history.select_related("corporation").order_by("-start_date"):
+        full = list(ma.corporation_history.select_related("corporation").order_by("start_date"))
+        end_by_start = {h.start_date: (full[i + 1].start_date if i + 1 < len(full) else None)
+                        for i, h in enumerate(full)}
+        now = timezone.now()
+        for h in reversed(full):
             if h.corporation_id < 98_000_000:
                 continue
+            end_dt = end_by_start.get(h.start_date)
+            days = ((end_dt or now) - h.start_date).days if h.start_date else None
             corp_history.append({
                 "corp_id": h.corporation_id,
                 "corp_name": getattr(h.corporation, "name", str(h.corporation_id)),
                 "alliance_id": corp_alliance(h.corporation_id),
-                "start": h.start_date, "is_deleted": getattr(h, "is_deleted", False),
+                "start": h.start_date,
+                "start_dt": h.start_date,
+                "end_dt": end_dt,
+                "duration_days": days,
+                "duration_label": _fmt_duration(days),
+                "is_current": end_dt is None,
+                "is_deleted": getattr(h, "is_deleted", False),
             })
     except Exception:
         pass

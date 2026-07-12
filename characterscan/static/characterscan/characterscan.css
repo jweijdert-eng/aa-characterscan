@@ -183,6 +183,25 @@
 .cs-app .cs-tabs .nav-link:hover { color: var(--cs-blue); }
 .cs-app .cs-tabs .nav-link.active { background-color: var(--cs-blue); color: #021016; }
 
+/* Looptijd-badge in de corp-historie (korte stints = rood) */
+.cs-app .cs-dur {
+    flex-shrink: 0;
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .03em;
+    padding: .1rem .45rem;
+    border-radius: 6px;
+    color: var(--cs-blue);
+    background: rgba(0, 180, 216, .12);
+    border: 1px solid rgba(0, 180, 216, .3);
+    white-space: nowrap;
+}
+.cs-app .cs-dur-short {
+    color: #ff9a9a;
+    background: rgba(224, 85, 85, .14);
+    border-color: rgba(224, 85, 85, .4);
+}
+
 /* Mail-body (gescande mails) */
 .cs-app .cs-mail-body {
     white-space: pre-wrap;
