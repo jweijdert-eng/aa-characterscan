@@ -9,7 +9,15 @@ from .models import Recruit, RecruitLogEntry, Settings
 class SettingsAdmin(admin.ModelAdmin):
     """Eén bewerkbare rij met plugin-instellingen (webhook + toggles)."""
 
-    fields = ("discord_webhook", "notify_new_application", "notify_alerts")
+    fieldsets = (
+        ("Discord-notificaties", {
+            "fields": ("discord_webhook", "notify_new_application", "notify_alerts"),
+        }),
+        ("Vetting-drempels", {
+            "fields": ("wallet_alert_isk", "injector_alert",
+                       "trusted_link_domains", "extra_enemy_ids"),
+        }),
+    )
     actions = ("send_test_notification",)
 
     @admin.action(description="Stuur test-notificatie naar Discord")

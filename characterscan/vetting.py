@@ -123,9 +123,22 @@ DEFAULT_TRUSTED_DOMAINS = [
 ]
 
 
+def _cs_settings():
+    """De Settings-singleton, of None als de tabel er (nog) niet is."""
+    try:
+        from .models import Settings
+        return Settings.load()
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def trusted_domains():
     extra = getattr(settings, "CHARACTERSCAN_TRUSTED_LINK_DOMAINS", None) or []
-    return set(DEFAULT_TRUSTED_DOMAINS) | {str(d).lower().strip().lstrip(".") for d in extra}
+    result = set(DEFAULT_TRUSTED_DOMAINS) | {str(d).lower().strip().lstrip(".") for d in extra}
+    s = _cs_settings()
+    if s:
+        result |= set(s.trusted_domains_list())
+    return result
 
 
 def _url_host(url):
@@ -352,7 +365,11 @@ def enemy_set(recruiter_eve_character=None):
     """Dict {id: naam} vijandige entiteiten — automatisch uit corp/alliance-standings."""
     enemy = dict(org_enemy_ids())
 
-    for eid in getattr(settings, "CHARACTERSCAN_ENEMY_IDS", None) or []:
+    manual = list(getattr(settings, "CHARACTERSCAN_ENEMY_IDS", None) or [])
+    s = _cs_settings()
+    if s:
+        manual += s.extra_enemy_id_list()
+    for eid in manual:
         try:
             enemy.setdefault(int(eid), f"#{int(eid)}")
         except (TypeError, ValueError):
@@ -446,6 +463,9 @@ def enemy_hits(profile, enemy):
 def wallet_flags(profile, enemy):
     """Scan de wallet-journal op grote/verdachte ISK-bewegingen. → (flags, bad, warn)."""
     threshold = float(getattr(settings, "CHARACTERSCAN_WALLET_ALERT_ISK", 1_000_000_000))
+    _s = _cs_settings()
+    if _s and _s.wallet_alert_isk:
+        threshold = float(_s.wallet_alert_isk)
     flags, bad, warn = [], 0, 0
     journal = profile.get("wallet_journal", [])
     if not journal:
@@ -621,6 +641,9 @@ def assess(eve_character, enemy, with_zkill=True):
     inj = profile.get("skill_injectors") or {}
     if inj.get("has_transactions"):
         threshold = int(getattr(settings, "CHARACTERSCAN_INJECTOR_ALERT", 5))
+        _si = _cs_settings()
+        if _si and _si.injector_alert:
+            threshold = int(_si.injector_alert)
         large, small, total = inj.get("large", 0), inj.get("small", 0), inj.get("total", 0)
         span = ""
         if inj.get("first") and inj.get("last"):

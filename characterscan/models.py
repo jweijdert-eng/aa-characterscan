@@ -45,6 +45,25 @@ class Settings(models.Model):
     notify_alerts = models.BooleanField(
         default=True, verbose_name=_("Melden bij nieuwe rode vlag (monitoring)"),
     )
+    # Vetting-drempels (admin wint; anders settings.py-fallback)
+    wallet_alert_isk = models.BigIntegerField(
+        null=True, blank=True, verbose_name=_("Wallet-alarmdrempel (ISK)"),
+        help_text=_("Grote/verdachte ISK-bewegingen boven dit bedrag. Leeg = standaard 1 miljard."),
+    )
+    injector_alert = models.PositiveSmallIntegerField(
+        null=True, blank=True, verbose_name=_("Skill-injector-drempel"),
+        help_text=_("Waarschuwing vanaf dit aantal gekochte Large injectors. Leeg = standaard 5."),
+    )
+    trusted_link_domains = models.TextField(
+        blank=True, default="", verbose_name=_("Vertrouwde link-domeinen"),
+        help_text=_("Eén per regel (of komma-gescheiden). Links hierheen tellen niet als "
+                    "'externe link' in de mail-scan. Bijv. auth.jouwalliance.org"),
+    )
+    extra_enemy_ids = models.TextField(
+        blank=True, default="", verbose_name=_("Extra vijand-ids"),
+        help_text=_("Handmatige aanvulling op de automatische vijandenlijst: character-, corp- "
+                    "of alliance-ids (één per regel of komma-gescheiden)."),
+    )
 
     class Meta:
         default_permissions = ()
@@ -54,6 +73,17 @@ class Settings(models.Model):
 
     def __str__(self) -> str:
         return "Character Scan instellingen"
+
+    @staticmethod
+    def _split(text):
+        import re
+        return [t.strip() for t in re.split(r"[\s,]+", text or "") if t.strip()]
+
+    def trusted_domains_list(self):
+        return [d.lower().lstrip(".") for d in self._split(self.trusted_link_domains)]
+
+    def extra_enemy_id_list(self):
+        return [int(t) for t in self._split(self.extra_enemy_ids) if t.isdigit()]
 
     def save(self, *args, **kwargs):
         self.pk = 1  # singleton
