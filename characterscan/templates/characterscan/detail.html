@@ -51,6 +51,7 @@
             <div class="cs-verdict cs-verdict-{{ vetting.verdict.level }}">
                 <span class="cs-verdict-icon">{{ vetting.verdict.icon }}</span>
                 <span class="cs-verdict-label">{{ vetting.verdict.label }}</span>
+                <span class="cs-verdict-score" title="{% translate 'risico-score' %}">{{ vetting.score }}<span class="cs-verdict-score-max">/100</span></span>
                 <span class="cs-verdict-counts">
                     {% if vetting.counts.bad %}<span class="cs-count cs-count-bad">⛔ {{ vetting.counts.bad }}</span>{% endif %}
                     {% if vetting.counts.warn %}<span class="cs-count cs-count-warn">⚠ {{ vetting.counts.warn }}</span>{% endif %}

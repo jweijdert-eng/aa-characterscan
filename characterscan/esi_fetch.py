@@ -40,6 +40,7 @@ CS_RECRUIT_SCOPES = [
     "esi-mail.read_mail.v1",
     "esi-assets.read_assets.v1",
     "esi-universe.read_structures.v1",
+    "esi-killmails.read_killmails.v1",
 ]
 
 # Skill-injector-types (vaste ESI type_ids)
@@ -314,6 +315,35 @@ def _strip_html(html):
     return h.strip()
 
 
+def _process_killmails(km_list, cid):
+    """Recente killmails → lijst parsed dicts (kill/loss, victim-org, mede-aanvaller-orgs)."""
+    km_list = (km_list if isinstance(km_list, list) else [])[:30]
+    if not km_list:
+        return []
+
+    def one(k):
+        d = _pub(f"/killmails/{k['killmail_id']}/{k['killmail_hash']}/")
+        if not isinstance(d, dict):
+            return None
+        victim = d.get("victim") or {}
+        attackers = d.get("attackers") or []
+        att_chars = {a.get("character_id") for a in attackers}
+        others = [a for a in attackers if a.get("character_id") != cid]
+        return {
+            "id": k["killmail_id"],
+            "date": d.get("killmail_time"),
+            "is_kill": cid in att_chars,  # recruit staat bij de aanvallers
+            "victim_char": victim.get("character_id"),
+            "victim_corp": victim.get("corporation_id"),
+            "victim_alliance": victim.get("alliance_id"),
+            "attacker_corp_ids": list({a.get("corporation_id") for a in others if a.get("corporation_id")}),
+            "attacker_alliance_ids": list({a.get("alliance_id") for a in others if a.get("alliance_id")}),
+        }
+
+    results = _parallel({i: (lambda kk=k: one(kk)) for i, k in enumerate(km_list)}, max_workers=10)
+    return [r for r in (results.get(i) for i in range(len(km_list))) if r]
+
+
 def _process_clones(clones_raw, access):
     """Clones-endpoint → {jump_count, home, locations[]} met geresolvede locaties."""
     if not isinstance(clones_raw, dict):
@@ -383,6 +413,7 @@ def _fetch_live(eve_character, token):
         "mail": lambda: _auth(f"/characters/{cid}/mail/", access),
         "clones": lambda: _auth(f"/characters/{cid}/clones/", access),
         "assets": lambda: _auth(f"/characters/{cid}/assets/", access, paged=True),
+        "killmails": lambda: _auth(f"/characters/{cid}/killmails/recent/", access),
     })
     info = res["info"]
     wallet = res["wallet"]
@@ -397,6 +428,7 @@ def _fetch_live(eve_character, token):
     mail_raw = res["mail"]
     clones = _process_clones(res["clones"], access)
     assets = _process_assets(res["assets"] if isinstance(res["assets"], list) else [], access)
+    killmails = _process_killmails(res["killmails"], cid)
 
     skills = (skills_raw or {}).get("skills", []) if isinstance(skills_raw, dict) else []
     contacts_raw = contacts_raw if isinstance(contacts_raw, list) else []
@@ -578,6 +610,7 @@ def _fetch_live(eve_character, token):
         "skill_injectors": skill_injectors,
         "clones": clones,
         "assets": assets,
+        "killmails": killmails,
         "ship_type_id": ship.get("ship_type_id") if ship else None,
         "ship_type_name": name_map.get(ship.get("ship_type_id")) if ship else None,
         "ship_name": ship.get("ship_name") if ship else None,  # speler-gegeven naam
@@ -702,7 +735,7 @@ def _fetch_memberaudit(eve_character):
         "skill_groups": skill_groups, "risk_skills": risk_skills,
         "contacts": contacts, "contracts": contracts,
         "corp_history": corp_history, "wallet_journal": journal,
-        "clones": None, "assets": None,
+        "clones": None, "assets": None, "killmails": [],
         "ship_type_id": None, "ship_type_name": None, "ship_name": None,
         "system_id": None, "location_name": None, "station_name": None, "docked": False,
     }
@@ -719,7 +752,7 @@ def _empty(eve_character):
         "sec": None, "age_years": None, "wallet": None, "total_sp": None, "unallocated_sp": None, "skill_count": None,
         "skill_groups": [], "risk_skills": [], "contacts": [], "contracts": [],
         "corp_history": [], "wallet_journal": [],
-        "clones": None, "assets": None,
+        "clones": None, "assets": None, "killmails": [],
         "ship_type_id": None, "ship_type_name": None, "ship_name": None,
         "system_id": None, "location_name": None, "station_name": None, "docked": False,
     }

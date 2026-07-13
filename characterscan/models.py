@@ -30,6 +30,41 @@ class General(models.Model):
         )
 
 
+class Settings(models.Model):
+    """Eén rij met plugin-instellingen, bewerkbaar via het admin-paneel."""
+
+    discord_webhook = models.URLField(
+        max_length=500, blank=True, default="",
+        verbose_name=_("Discord-webhook-URL"),
+        help_text=_("Voor aanmeldingen en rode-vlag-meldingen. Leeg = notificaties uit. "
+                    "(Discord: Kanaal → Integraties → Webhooks → Nieuwe webhook.)"),
+    )
+    notify_new_application = models.BooleanField(
+        default=True, verbose_name=_("Melden bij nieuwe aanmelding"),
+    )
+    notify_alerts = models.BooleanField(
+        default=True, verbose_name=_("Melden bij nieuwe rode vlag (monitoring)"),
+    )
+
+    class Meta:
+        default_permissions = ()
+        permissions = (("manage_settings", _("Can manage Character Scan settings")),)
+        verbose_name = _("instellingen")
+        verbose_name_plural = _("instellingen")
+
+    def __str__(self) -> str:
+        return "Character Scan instellingen"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1  # singleton
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def load(cls) -> "Settings":
+        obj, _created = cls.objects.get_or_create(pk=1)
+        return obj
+
+
 class Recruit(models.Model):
     """Een aanmelding: een EveCharacter met een recruitment-status + notities."""
 
@@ -51,6 +86,12 @@ class Recruit(models.Model):
     applied_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # Doorlopende monitoring: laatste automatische scan-uitkomst
+    last_score = models.PositiveSmallIntegerField(null=True, blank=True)
+    last_verdict = models.CharField(max_length=10, blank=True, default="")
+    last_scanned_at = models.DateTimeField(null=True, blank=True)
+    known_bad_flags = models.JSONField(default=list, blank=True)
+
     class Meta:
         ordering = ["-updated_at"]
         verbose_name = _("recruit")
@@ -69,6 +110,7 @@ class RecruitLogEntry(models.Model):
         REJECTED = "rejected", _("Afgewezen")
         NEW = "new", _("Heropend")
         NOTE = "note", _("Notitie")
+        ALERT = "alert", _("Waarschuwing")
 
     recruit = models.ForeignKey(
         Recruit, on_delete=models.CASCADE, related_name="log_entries"

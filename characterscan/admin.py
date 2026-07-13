@@ -1,8 +1,45 @@
 """Admin models — Character Scan."""
 
-from django.contrib import admin
+from django.contrib import admin, messages
 
-from .models import Recruit, RecruitLogEntry
+from .models import Recruit, RecruitLogEntry, Settings
+
+
+@admin.register(Settings)
+class SettingsAdmin(admin.ModelAdmin):
+    """Eén bewerkbare rij met plugin-instellingen (webhook + toggles)."""
+
+    fields = ("discord_webhook", "notify_new_application", "notify_alerts")
+    actions = ("send_test_notification",)
+
+    @admin.action(description="Stuur test-notificatie naar Discord")
+    def send_test_notification(self, request, queryset):
+        from .discord import notify_test, webhook_url
+        if not webhook_url():
+            self.message_user(request, "Geen webhook-URL ingesteld — vul die eerst in en sla op.",
+                              level=messages.WARNING)
+            return
+        if notify_test():
+            self.message_user(request, "Test-notificatie verstuurd — check je Discord-kanaal.",
+                              level=messages.SUCCESS)
+        else:
+            self.message_user(request, "Versturen mislukt — controleer de webhook-URL.",
+                              level=messages.ERROR)
+
+    def _can(self, request):
+        return request.user.is_superuser or request.user.has_perm("characterscan.manage_settings")
+
+    def has_view_permission(self, request, obj=None):
+        return self._can(request)
+
+    def has_change_permission(self, request, obj=None):
+        return self._can(request)
+
+    def has_add_permission(self, request):
+        return self._can(request) and not Settings.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 class RecruitLogInline(admin.TabularInline):

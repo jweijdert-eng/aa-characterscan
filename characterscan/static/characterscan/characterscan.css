@@ -127,6 +127,8 @@
 }
 .cs-app .cs-verdict-icon { font-size: 1.35rem; line-height: 1; text-shadow: 0 0 16px currentColor; }
 .cs-app .cs-verdict-label { font-size: 1.1rem; }
+.cs-app .cs-verdict-score { font-size: 1.05rem; font-weight: 800; padding: .1rem .55rem; border-radius: 8px; background: rgba(0, 0, 0, .3); }
+.cs-app .cs-verdict-score-max { font-size: .7rem; font-weight: 600; opacity: .6; }
 .cs-app .cs-verdict-counts { margin-left: auto; display: flex; gap: .4rem; }
 .cs-app .cs-verdict-bad { background: rgba(224, 85, 85, .12); border-color: rgba(224, 85, 85, .55); color: #ff9a9a; box-shadow: 0 0 26px rgba(224, 85, 85, .12); }
 .cs-app .cs-verdict-warn { background: rgba(240, 192, 64, .10); border-color: rgba(240, 192, 64, .5); color: var(--cs-gold); }

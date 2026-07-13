@@ -64,6 +64,12 @@ def apply(request: WSGIRequest) -> HttpResponse:
         _, was_created = Recruit.objects.get_or_create(eve_character=ec)
         created += int(was_created)
     if created:
+        main = getattr(request.user.profile, "main_character", None) or chars[0]
+        try:
+            from .discord import notify_application
+            notify_application(main, n_chars=len(chars))
+        except Exception:  # noqa: BLE001 — notificatie mag de aanmelding nooit blokkeren
+            pass
         messages.success(
             request,
             _("Je aanmelding is ingediend (%(n)d character(s)). Een recruiter neemt hem in behandeling.")
@@ -122,11 +128,12 @@ def activity_log(request: WSGIRequest) -> HttpResponse:
     """Overzicht van beslissingen/notities (wie, wanneer, opmerking)."""
     action = request.GET.get("action", "accepted")
     qs = RecruitLogEntry.objects.select_related("recruit__eve_character", "actor").order_by("-created_at")
-    if action in ("accepted", "rejected", "note", "new"):
+    if action in ("accepted", "rejected", "note", "new", "alert"):
         qs = qs.filter(action=action)
     tabs = [
         {"key": "accepted", "label": _("Aangenomen"), "color": "success"},
         {"key": "rejected", "label": _("Afgewezen"), "color": "danger"},
+        {"key": "alert", "label": _("Waarschuwingen"), "color": "warning"},
         {"key": "note", "label": _("Notities"), "color": "secondary"},
         {"key": "all", "label": _("Alles"), "color": "info"},
     ]

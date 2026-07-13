@@ -44,6 +44,7 @@
                             <td>
                                 {% if e.action == "accepted" %}<span class="badge bg-success">{{ e.get_action_display }}</span>
                                 {% elif e.action == "rejected" %}<span class="badge bg-danger">{{ e.get_action_display }}</span>
+                                {% elif e.action == "alert" %}<span class="badge bg-warning">⚠ {{ e.get_action_display }}</span>
                                 {% elif e.action == "note" %}<span class="badge bg-secondary">{{ e.get_action_display }}</span>
                                 {% else %}<span class="badge bg-info">{{ e.get_action_display }}</span>{% endif %}
                             </td>

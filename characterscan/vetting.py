@@ -29,6 +29,44 @@ VERDICTS = {
 CORP_CONTACTS_SCOPE = "esi-corporations.read_contacts.v1"
 ALLIANCE_CONTACTS_SCOPE = "esi-alliances.read_contacts.v1"
 
+# Risico-gewichten per vetting-signaal (punten). Optelling → score 0-100.
+# Overschrijfbaar via settings.CHARACTERSCAN_RISK_WEIGHTS ({label: punten}).
+RISK_WEIGHTS = {
+    "Huidige corp/alliance": 60,
+    "ISK met vijand": 45,
+    "Mail met vijand": 45,
+    "Clone in vijandgebied": 45,
+    "Vliegt met vijand": 45,
+    "Awox-verdenking": 55,
+    "Killmail met vijand": 35,
+    "Assets in vijandgebied": 40,
+    "Vijand in historie": 35,
+    "Vijand als vriend gemarkeerd": 35,
+    "Contracten met vijand": 30,
+    "Leeftijd": 25,
+    "Skill injectors": 15,
+    "Onverdeelde SP": 15,
+    "SP vs. leeftijd": 15,
+    "Verdachte mails": 15,
+    "Werkgevershistorie": 12,
+    "ISK-donatie (in)": 10,
+    "Risk-skills": 8,
+    "Security status": 8,
+    "Activiteit": 8,
+}
+DEFAULT_POINTS = {"bad": 30, "warn": 10}
+
+
+def risk_score(flags):
+    """Optelling van gewichten van bad/warn-signalen → score 0-100."""
+    override = getattr(settings, "CHARACTERSCAN_RISK_WEIGHTS", None) or {}
+    total = 0
+    for f in flags:
+        if f.get("level") not in ("bad", "warn"):
+            continue
+        total += override.get(f["label"], RISK_WEIGHTS.get(f["label"], DEFAULT_POINTS[f["level"]]))
+    return min(100, total)
+
 # Verdachte termen in mailinhoud — bewust conservatief (échte spy-signalen).
 # Generieke fleet-woorden (intel, titan, supers, comms-apps) geven te veel
 # false positives op normale corp-mail en zitten hier daarom NIET in.
@@ -676,6 +714,33 @@ def assess(eve_character, enemy, with_zkill=True):
             elif recent:
                 flag("ok", "success", "Recente activiteit", f"{recent} kills recent")
 
+    # Killmail-diepteanalyse: samen met vijand op een kill + awox (eigen lid gekilld)
+    kms = profile.get("killmails")
+    if kms:
+        my_corp, my_ally = profile.get("corp_id"), profile.get("alliance_id")
+        kills = [k for k in kms if k.get("is_kill")]
+        enemy_km, awox = [], []
+        for k in kills:
+            orgs = set(k.get("attacker_corp_ids") or []) | set(k.get("attacker_alliance_ids") or [])
+            if enemy and (orgs & set(enemy)):
+                enemy_km.append(k)
+            vc, va = k.get("victim_corp"), k.get("victim_alliance")
+            if (vc and vc == my_corp) or (va and my_ally and va == my_ally):
+                awox.append(k)
+        if awox:
+            bad += 1
+            flag("bad", "danger", "Awox-verdenking",
+                 f"<b>{len(awox)}×</b> een lid van de eigen corp/alliance gekilld")
+        if enemy and enemy_km:
+            bad += 1
+            names = {enemy[o] for k in enemy_km
+                     for o in (set(k.get("attacker_corp_ids") or []) | set(k.get("attacker_alliance_ids") or []))
+                     if o in enemy}
+            flag("bad", "danger", "Killmail met vijand",
+                 f"<b>{len(enemy_km)}×</b> samen met een vijand op een kill ({', '.join(list(names)[:3])})")
+        if kills and not awox and not (enemy and enemy_km):
+            flag("ok", "success", "Killmail-analyse", f"{len(kills)} kills gecheckt — niks verdachts")
+
     # Vijand-checks
     if not enemy:
         flag("info", "secondary", "Vijandenlijst", "Niet geladen — checks overgeslagen")
@@ -704,4 +769,4 @@ def assess(eve_character, enemy, with_zkill=True):
     rank = {"bad": 0, "warn": 1, "ok": 2, "info": 3}
     flags.sort(key=lambda f: rank.get(f["level"], 3))  # ernst bovenaan (stabiel)
     counts = {lvl: sum(1 for f in flags if f["level"] == lvl) for lvl in ("bad", "warn", "ok", "info")}
-    return {"verdict": verdict, "flags": flags, "counts": counts}
+    return {"verdict": verdict, "score": risk_score(flags), "flags": flags, "counts": counts}
