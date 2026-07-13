@@ -113,6 +113,33 @@
     .cs-app .cs-flag-label { flex-basis: auto; border-right: none; border-bottom: 1px solid var(--cs-border); }
 }
 
+/* Verdict-banner met telling-overzicht */
+.cs-app .cs-verdict {
+    display: flex;
+    align-items: center;
+    gap: .7rem;
+    padding: .7rem 1.05rem;
+    margin-bottom: 1rem;
+    border-radius: 10px;
+    border: 1px solid var(--cs-border);
+    font-weight: 800;
+    letter-spacing: .05em;
+}
+.cs-app .cs-verdict-icon { font-size: 1.35rem; line-height: 1; text-shadow: 0 0 16px currentColor; }
+.cs-app .cs-verdict-label { font-size: 1.1rem; }
+.cs-app .cs-verdict-counts { margin-left: auto; display: flex; gap: .4rem; }
+.cs-app .cs-verdict-bad { background: rgba(224, 85, 85, .12); border-color: rgba(224, 85, 85, .55); color: #ff9a9a; box-shadow: 0 0 26px rgba(224, 85, 85, .12); }
+.cs-app .cs-verdict-warn { background: rgba(240, 192, 64, .10); border-color: rgba(240, 192, 64, .5); color: var(--cs-gold); }
+.cs-app .cs-verdict-ok { background: rgba(62, 207, 110, .10); border-color: rgba(62, 207, 110, .5); color: var(--cs-green); }
+.cs-app .cs-count { font-size: .74rem; font-weight: 700; letter-spacing: 0; padding: .12rem .55rem; border-radius: 20px; background: rgba(0, 0, 0, .32); }
+.cs-app .cs-count-bad { color: #ff9a9a; }
+.cs-app .cs-count-warn { color: var(--cs-gold); }
+.cs-app .cs-count-ok { color: var(--cs-green); }
+
+/* Statusicoon in de flag-label */
+.cs-app .cs-flag-label { gap: .4rem; }
+.cs-app .cs-flag-ico { flex-shrink: 0; font-size: .85em; opacity: .95; }
+
 /* Badges */
 .cs-app .badge { font-weight: 700; letter-spacing: .03em; }
 .cs-app .badge.bg-success   { background: rgba(62, 207, 110, .18) !important; color: var(--cs-green) !important; }

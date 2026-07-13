@@ -3,8 +3,8 @@ Weergave-laag: leest het canonieke data-dict uit esi_fetch en markeert vijanden.
 Character Scan is hiermee niet meer afhankelijk van Member Audit-modellen.
 """
 
-from .esi_fetch import get_profile
-from .vetting import _parse_date, _scan_text, mail_is_friendly, trusted_domains
+from .esi_fetch import get_profile, sov_map
+from .vetting import _location_enemy, _parse_date, _scan_text, mail_is_friendly, trusted_domains
 
 
 def basic_stats(eve_character):
@@ -57,6 +57,33 @@ def full_profile(eve_character, enemy=None):
         m["suspect"] = [] if m["friendly"] else sorted(_scan_text(
             (m.get("subject") or "") + " " + (m.get("body") or ""), trusted))
 
+    # Clones + assets: markeer vijandelijke locaties en groepeer jump clones
+    clones = p.get("clones")
+    assets = p.get("assets")
+    if clones or assets:
+        sov = sov_map()
+
+        def _mark(locs):
+            for lc in locs or []:
+                is_en, reason = _location_enemy(lc, enemy, sov)
+                lc["is_enemy"], lc["enemy_reason"] = is_en, reason
+
+        if clones:
+            if clones.get("home"):
+                _mark([clones["home"]])
+            _mark(clones.get("locations"))
+            grouped = {}
+            for lc in clones.get("locations") or []:
+                g = grouped.get(lc["location_id"])
+                if not g:
+                    g = grouped[lc["location_id"]] = {**lc, "count": 0, "max_implants": 0}
+                g["count"] += 1
+                g["max_implants"] = max(g["max_implants"], lc.get("implants", 0))
+            clones["grouped"] = sorted(grouped.values(),
+                                       key=lambda x: (x["is_enemy"], x["count"]), reverse=True)
+        if assets:
+            _mark(assets.get("locations"))
+
     return {
         "stats": basic_stats(eve_character),
         "registered": p.get("ok", False),
@@ -77,4 +104,6 @@ def full_profile(eve_character, enemy=None):
             "station_name": p.get("station_name"),
             "docked": p.get("docked", False),
         },
+        "clones": clones,
+        "assets": assets,
     }

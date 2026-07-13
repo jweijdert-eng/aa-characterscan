@@ -701,4 +701,7 @@ def assess(eve_character, enemy, with_zkill=True):
             flag("ok", "success", "Contracten met vijand", "Geen")
 
     verdict = VERDICTS["bad"] if bad else VERDICTS["warn"] if warn else VERDICTS["ok"]
-    return {"verdict": verdict, "flags": flags}
+    rank = {"bad": 0, "warn": 1, "ok": 2, "info": 3}
+    flags.sort(key=lambda f: rank.get(f["level"], 3))  # ernst bovenaan (stabiel)
+    counts = {lvl: sum(1 for f in flags if f["level"] == lvl) for lvl in ("bad", "warn", "ok", "info")}
+    return {"verdict": verdict, "flags": flags, "counts": counts}

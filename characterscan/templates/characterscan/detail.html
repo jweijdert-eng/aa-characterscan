@@ -48,13 +48,22 @@
     <div class="card mb-3">
         <div class="card-header">🛡 {% translate "Vetting" %}</div>
         <div class="card-body">
-            <div class="alert alert-{{ vetting.verdict.css }} text-center fw-bold fs-5 py-2">
-                {{ vetting.verdict.icon }} {{ vetting.verdict.label }}
+            <div class="cs-verdict cs-verdict-{{ vetting.verdict.level }}">
+                <span class="cs-verdict-icon">{{ vetting.verdict.icon }}</span>
+                <span class="cs-verdict-label">{{ vetting.verdict.label }}</span>
+                <span class="cs-verdict-counts">
+                    {% if vetting.counts.bad %}<span class="cs-count cs-count-bad">⛔ {{ vetting.counts.bad }}</span>{% endif %}
+                    {% if vetting.counts.warn %}<span class="cs-count cs-count-warn">⚠ {{ vetting.counts.warn }}</span>{% endif %}
+                    {% if vetting.counts.ok %}<span class="cs-count cs-count-ok">✓ {{ vetting.counts.ok }}</span>{% endif %}
+                </span>
             </div>
             {% for f in vetting.flags %}
                 <div class="cs-flag cs-flag-{{ f.level }}">
-                    <span class="cs-flag-label">{{ f.label }}</span>
-                    <span class="cs-flag-value"><span>{{ f.value|safe }}</span></span>
+                    <span class="cs-flag-label">
+                        <span class="cs-flag-ico">{% if f.level == 'bad' %}⛔{% elif f.level == 'warn' %}⚠{% elif f.level == 'ok' %}✓{% else %}ℹ{% endif %}</span>
+                        <span>{{ f.label }}</span>
+                    </span>
+                    <span class="cs-flag-value"><span>{% if f.value %}{{ f.value|safe }}{% else %}{{ f.text }}{% endif %}</span></span>
                 </div>
             {% endfor %}
         </div>
@@ -194,6 +203,59 @@
                     {% empty %}
                         <li class="list-group-item text-muted">{% translate "Geen contracts." %}</li>
                     {% endfor %}
+                </ul>
+            </div>
+        </div>
+
+        {# Jump clones #}
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header">🧬 {% translate "Jump clones" %}{% if profile.clones %} <span class="text-muted small">— {{ profile.clones.jump_count }}</span>{% endif %}</div>
+                <ul class="list-group list-group-flush" style="max-height:320px;overflow:auto">
+                    {% if profile.clones.home %}
+                        <li class="list-group-item {% if profile.clones.home.is_enemy %}list-group-item-danger{% endif %}">
+                            <div class="d-flex justify-content-between align-items-center gap-2">
+                                <span class="{% if profile.clones.home.is_enemy %}text-danger fw-bold{% endif %}">{% if profile.clones.home.is_enemy %}⚠ {% endif %}🏠 {{ profile.clones.home.name|default:"?" }}</span>
+                                <span class="badge bg-info">{% translate "home" %}</span>
+                            </div>
+                            <div class="small text-muted">{{ profile.clones.home.system_name|default:"" }}{% if profile.clones.home.owner_name %} · {{ profile.clones.home.owner_name }}{% endif %}{% if profile.clones.home.enemy_reason %} · <span class="text-danger">{{ profile.clones.home.enemy_reason }}</span>{% endif %}</div>
+                        </li>
+                    {% endif %}
+                    {% for c in profile.clones.grouped %}
+                        <li class="list-group-item {% if c.is_enemy %}list-group-item-danger{% endif %}">
+                            <div class="d-flex justify-content-between align-items-center gap-2">
+                                <span class="{% if c.is_enemy %}text-danger fw-bold{% endif %}">{% if c.is_enemy %}⚠ {% endif %}{{ c.name|default:"?" }}</span>
+                                <span class="text-muted small text-nowrap">{% if c.count > 1 %}{{ c.count }}× · {% endif %}{{ c.max_implants }} impl</span>
+                            </div>
+                            <div class="small text-muted">{{ c.system_name|default:"" }}{% if c.owner_name %} · {{ c.owner_name }}{% endif %}{% if c.enemy_reason %} · <span class="text-danger">{{ c.enemy_reason }}</span>{% endif %}</div>
+                        </li>
+                    {% endfor %}
+                    {% if not profile.clones %}
+                        <li class="list-group-item text-muted">{% translate "Geen clone-data — scope niet verleend." %}</li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+
+        {# Assets #}
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header">🗄 {% translate "Assets" %}{% if profile.assets %} <span class="text-muted small">— {{ profile.assets.count }} items · {{ profile.assets.location_count }} loc.</span>{% endif %}</div>
+                <ul class="list-group list-group-flush" style="max-height:320px;overflow:auto">
+                    {% for a in profile.assets.locations %}
+                        <li class="list-group-item {% if a.is_enemy %}list-group-item-danger{% endif %}">
+                            <div class="d-flex justify-content-between align-items-center gap-2">
+                                <span class="{% if a.is_enemy %}text-danger fw-bold{% endif %}">{% if a.is_enemy %}⚠ {% endif %}{{ a.name|default:a.location_id }}</span>
+                                <span class="text-muted small text-nowrap">{{ a.item_count }} items</span>
+                            </div>
+                            {% if a.owner_name or a.enemy_reason %}<div class="small text-muted">{{ a.owner_name|default:"" }}{% if a.enemy_reason %} · <span class="text-danger">{{ a.enemy_reason }}</span>{% endif %}</div>{% endif %}
+                        </li>
+                    {% empty %}
+                        <li class="list-group-item text-muted">{% translate "Geen asset-data — scope niet verleend." %}</li>
+                    {% endfor %}
+                    {% if profile.assets.location_count > 25 %}
+                        <li class="list-group-item text-muted small">{% blocktranslate with n=profile.assets.location_count %}…top 25 van {{ n }} locaties{% endblocktranslate %}</li>
+                    {% endif %}
                 </ul>
             </div>
         </div>
