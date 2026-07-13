@@ -394,41 +394,54 @@ def _process_assets(assets_raw, access):
 
 
 # ── LIVE ophalen via ESI ─────────────────────────────────────────────────────
-def _fetch_live(eve_character, token):
+def _fetch_live(eve_character, token, lite=False):
+    """Haal het profiel live via ESI.
+
+    `lite=True` (voor de recruiter-lijst) slaat de zwaarste calls over
+    (mail-bodies, killmails, assets, clones, journal, transactions, locatie, schip)
+    en haalt alleen wat de lijst nodig heeft: info, wallet, skills, contacts,
+    contracts en corp-historie. Dat scheelt tientallen ESI-calls per recruit.
+    """
     cid = eve_character.character_id
     access = token.valid_access_token()
 
-    # Alle onafhankelijke ESI-calls tegelijk ophalen (parallel i.p.v. serieel)
-    res = _parallel({
+    # Basis-calls: altijd nodig (ook voor de lijst)
+    jobs = {
         "info": lambda: _pub(f"/characters/{cid}/"),
         "wallet": lambda: _auth(f"/characters/{cid}/wallet/", access),
         "skills": lambda: _auth(f"/characters/{cid}/skills/", access),
         "contacts": lambda: _auth(f"/characters/{cid}/contacts/", access, paged=True),
         "contracts": lambda: _auth(f"/characters/{cid}/contracts/", access, paged=True),
-        "journal": lambda: _auth(f"/characters/{cid}/wallet/journal/", access),
-        "transactions": lambda: _auth(f"/characters/{cid}/wallet/transactions/", access),
-        "loc": lambda: _auth(f"/characters/{cid}/location/", access),
-        "ship": lambda: _auth(f"/characters/{cid}/ship/", access),
         "hist": lambda: _pub(f"/characters/{cid}/corporationhistory/"),
-        "mail": lambda: _auth(f"/characters/{cid}/mail/", access),
-        "clones": lambda: _auth(f"/characters/{cid}/clones/", access),
-        "assets": lambda: _auth(f"/characters/{cid}/assets/", access, paged=True),
-        "killmails": lambda: _auth(f"/characters/{cid}/killmails/recent/", access),
-    })
+    }
+    # Zware calls: alleen voor de volledige (detail-)scan
+    if not lite:
+        jobs.update({
+            "journal": lambda: _auth(f"/characters/{cid}/wallet/journal/", access),
+            "transactions": lambda: _auth(f"/characters/{cid}/wallet/transactions/", access),
+            "loc": lambda: _auth(f"/characters/{cid}/location/", access),
+            "ship": lambda: _auth(f"/characters/{cid}/ship/", access),
+            "mail": lambda: _auth(f"/characters/{cid}/mail/", access),
+            "clones": lambda: _auth(f"/characters/{cid}/clones/", access),
+            "assets": lambda: _auth(f"/characters/{cid}/assets/", access, paged=True),
+            "killmails": lambda: _auth(f"/characters/{cid}/killmails/recent/", access),
+        })
+    res = _parallel(jobs)
     info = res["info"]
     wallet = res["wallet"]
     skills_raw = res["skills"]
     contacts_raw = res["contacts"]
     contracts_raw = res["contracts"]
-    journal_raw = res["journal"]
-    transactions_raw = res["transactions"]
-    loc = res["loc"]
-    ship = res["ship"]
-    hist_raw = res["hist"] or []
-    mail_raw = res["mail"]
-    clones = _process_clones(res["clones"], access)
-    assets = _process_assets(res["assets"] if isinstance(res["assets"], list) else [], access)
-    killmails = _process_killmails(res["killmails"], cid)
+    journal_raw = res.get("journal")
+    transactions_raw = res.get("transactions")
+    loc = res.get("loc")
+    ship = res.get("ship")
+    hist_raw = res.get("hist") or []
+    mail_raw = res.get("mail")
+    clones = None if lite else _process_clones(res.get("clones"), access)
+    assets = None if lite else _process_assets(
+        res.get("assets") if isinstance(res.get("assets"), list) else [], access)
+    killmails = [] if lite else _process_killmails(res.get("killmails"), cid)
 
     skills = (skills_raw or {}).get("skills", []) if isinstance(skills_raw, dict) else []
     contacts_raw = contacts_raw if isinstance(contacts_raw, list) else []
@@ -759,20 +772,29 @@ def _empty(eve_character):
     }
 
 
-def get_profile(eve_character, force=False):
-    """Canoniek data-dict voor een character. Live via ESI-token, anders MA-fallback."""
+def get_profile(eve_character, force=False, lite=False):
+    """Canoniek data-dict voor een character. Live via ESI-token, anders MA-fallback.
+
+    `lite=True` levert een lichtgewicht profiel (zonder mails/killmails/assets/clones)
+    voor de recruiter-lijst. Een al gecachte volledige scan wordt daarbij hergebruikt.
+    """
     cid = eve_character.character_id
-    key = f"cs_profile_{cid}"
+    full_key = f"cs_profile_{cid}"
+    lite_key = f"cs_profile_lite_{cid}"
     if not force:
-        cached = cache.get(key)
-        if cached is not None:
-            return cached
+        full = cache.get(full_key)
+        if full is not None:
+            return full  # volledige scan is een superset — prima voor de lijst
+        if lite:
+            cached = cache.get(lite_key)
+            if cached is not None:
+                return cached
 
     profile = None
     token = recruit_token(cid)
     if token:
         try:
-            profile = _fetch_live(eve_character, token)
+            profile = _fetch_live(eve_character, token, lite=lite)
         except Exception as e:
             logger.warning("Character Scan live-fetch faalde voor %s: %s", cid, e)
             profile = None
@@ -782,5 +804,5 @@ def get_profile(eve_character, force=False):
         profile = _empty(eve_character)
 
     profile["character_id"] = cid
-    cache.set(key, profile, PROFILE_CACHE_SECONDS)
+    cache.set(lite_key if lite else full_key, profile, PROFILE_CACHE_SECONDS)
     return profile

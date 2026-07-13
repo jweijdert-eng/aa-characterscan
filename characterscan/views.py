@@ -1,5 +1,7 @@
 """App Views — Character Scan recruitment/vetting."""
 
+from concurrent.futures import ThreadPoolExecutor
+
 # Django
 from django.conf import settings
 from django.contrib import messages
@@ -99,14 +101,26 @@ def recruiter_list(request: WSGIRequest) -> HttpResponse:
 
     recruiter_char = getattr(request.user.profile, "main_character", None)
     enemy = enemy_set(recruiter_char)
-    recruits = [
-        {
-            "recruit": r,
-            "stats": basic_stats(r.eve_character),
-            "verdict": quick_verdict(r.eve_character, enemy),
-        }
-        for r in qs
-    ]
+
+    # Elke recruit doet een (lichte) ESI-scan; die parallel uitvoeren scheelt veel
+    # laadtijd t.o.v. recruit-na-recruit serieel afwerken.
+    def _row(r):
+        from django.db import connections
+        try:
+            return {
+                "recruit": r,
+                "stats": basic_stats(r.eve_character, lite=True),
+                "verdict": quick_verdict(r.eve_character, enemy, lite=True),
+            }
+        finally:
+            connections.close_all()  # thread-eigen DB-connectie netjes sluiten
+
+    recruit_list = list(qs)
+    if recruit_list:
+        with ThreadPoolExecutor(max_workers=min(6, len(recruit_list))) as ex:
+            recruits = list(ex.map(_row, recruit_list))
+    else:
+        recruits = []
     from .vetting import standings_token_exists
 
     return render(

@@ -14,9 +14,9 @@ from .vetting import (
 )
 
 
-def basic_stats(eve_character):
+def basic_stats(eve_character, lite=False):
     """Compacte stats voor de recruiter-lijst / aanmeld-pagina."""
-    p = get_profile(eve_character)
+    p = get_profile(eve_character, lite=lite)
     return {
         "registered": p.get("ok", False),
         "source": p.get("source"),

@@ -529,9 +529,9 @@ def _zkill(character_id):
     return None
 
 
-def quick_verdict(eve_character, enemy):
+def quick_verdict(eve_character, enemy, lite=False):
     """Lichte verdict voor de lijst (geen zKill)."""
-    profile = get_profile(eve_character)
+    profile = get_profile(eve_character, lite=lite)
     if not profile.get("ok"):
         return {"level": "ok", "label": "?", "css": "secondary", "icon": "·"}
     if any(enemy_hits(profile, enemy).values()):
