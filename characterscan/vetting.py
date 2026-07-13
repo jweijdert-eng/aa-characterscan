@@ -140,6 +140,24 @@ def _untrusted_link(txt, trusted):
     return False
 
 
+_IMG = "https://images.evetech.net"
+_ICON_PATHS = {
+    "character": "characters/%s/portrait",
+    "corporation": "corporations/%s/logo",
+    "alliance": "alliances/%s/logo",
+    "type": "types/%s/icon",
+}
+
+
+def _icon(entity_id, kind):
+    """Klein inline-icoon (<img>) voor een entiteit in een vetting-waarde."""
+    path = _ICON_PATHS.get(kind)
+    if not path or not entity_id:
+        return ""
+    cls = "cs-inline-ico" + (" cs-inline-ico-round" if kind == "character" else "")
+    return f'<img src="{_IMG}/{path % entity_id}?size=32" class="{cls}" alt="">'
+
+
 def _scan_text(txt, trusted=None):
     """Verdachte termen + niet-vertrouwde externe links in een tekst → set labels."""
     hits = set()
@@ -385,9 +403,10 @@ def enemy_hits(profile, enemy):
             continue
         seen.add(cid)
         if cid in enemy:
-            hits["history"].append(h.get("corp_name", str(cid)))
+            hits["history"].append(_icon(cid, "corporation") + h.get("corp_name", str(cid)))
         elif h.get("alliance_id") and h["alliance_id"] in enemy:
-            hits["history"].append(f"{h.get('corp_name', cid)} (alliance {enemy[h['alliance_id']]})")
+            hits["history"].append(_icon(cid, "corporation")
+                                   + f"{h.get('corp_name', cid)} (alliance {enemy[h['alliance_id']]})")
 
     for c in profile.get("contacts", []):
         if c.get("standing", 0) > 0 and c.get("id") in enemy:
@@ -410,12 +429,12 @@ def wallet_flags(profile, enemy):
         return flags, bad, warn
 
     def cp(j):
-        # tegenpartij = de partij die niet het character zelf is
+        # tegenpartij = de partij die niet het character zelf is → (id, naam)
         for pid, name in ((j.get("first_party_id"), j.get("first_party_name")),
                           (j.get("second_party_id"), j.get("second_party_name"))):
             if pid and pid != profile.get("character_id"):
-                return name or f"#{pid}"
-        return "?"
+                return pid, (name or f"#{pid}")
+        return None, "?"
 
     big_don = [j for j in journal
                if j.get("ref_type") == "player_donation" and j.get("amount") and abs(float(j["amount"])) >= threshold]
@@ -423,10 +442,16 @@ def wallet_flags(profile, enemy):
     outgoing = [j for j in big_don if float(j["amount"]) < 0]
     if incoming:
         warn += 1
-        items = [f"{_fmt_isk(j['amount'])} ISK van <b>{cp(j)}</b> ({_fmt_date(j.get('date'))})" for j in incoming[:5]]
+        items = []
+        for j in incoming[:5]:
+            cid, cname = cp(j)
+            items.append(f"{_fmt_isk(j['amount'])} ISK van {_icon(cid, 'character')}<b>{cname}</b> ({_fmt_date(j.get('date'))})")
         flags.append({"level": "warn", "css": "warning", "label": "ISK-donatie (in)", "value": "; ".join(items)})
     if outgoing:
-        items = [f"{_fmt_isk(abs(float(j['amount'])))} ISK naar <b>{cp(j)}</b> ({_fmt_date(j.get('date'))})" for j in outgoing[:5]]
+        items = []
+        for j in outgoing[:5]:
+            cid, cname = cp(j)
+            items.append(f"{_fmt_isk(abs(float(j['amount'])))} ISK naar {_icon(cid, 'character')}<b>{cname}</b> ({_fmt_date(j.get('date'))})")
         flags.append({"level": "info", "css": "secondary", "label": "ISK-donatie (uit)", "value": "; ".join(items)})
 
     if enemy:
@@ -667,9 +692,11 @@ def assess(eve_character, enemy, with_zkill=True):
 
     # zKillboard: stats + associates (met wie vliegt hij) + schip-/activiteitsprofiel
     if with_zkill:
+        zkurl = f"https://zkillboard.com/character/{eve_character.character_id}/"
+        link = f'<a href="{zkurl}" target="_blank" rel="noopener">'
         zk = _zkill(eve_character.character_id)
         if not zk:
-            flag("info", "secondary", "zKillboard", "kon niet geladen worden")
+            flag("info", "secondary", "zKillboard", f"{link}open op zKillboard ↗</a> (stats niet geladen)")
         else:
             destroyed = zk.get("shipsDestroyed", 0) or 0
             lost = zk.get("shipsLost", 0) or 0
@@ -677,31 +704,35 @@ def assess(eve_character, enemy, with_zkill=True):
             gang = zk.get("gangRatio", 0)
             solo = zk.get("soloKills", 0) or 0
             if destroyed + lost == 0:
-                flag("info", "secondary", "zKillboard", "Geen PvP-historie")
+                flag("info", "secondary", "zKillboard", f"{link}Geen PvP-historie — open op zKillboard ↗</a>")
             else:
                 flag("info", "secondary", "zKillboard",
-                     f"<b>{destroyed}</b> kills / <b>{lost}</b> losses · danger {danger}% · gang {gang}% · {solo} solo")
+                     f"{link}<b>{destroyed}</b> kills / <b>{lost}</b> losses · danger {danger}% · "
+                     f"gang {gang}% · {solo} solo ↗</a>")
 
             tops = {t.get("type"): (t.get("values") or []) for t in zk.get("topLists", [])}
             # Associates: top-alliances/corps op zijn killmails — vijandig?
             assoc_hits = []
-            for typ, idk, namek in (("alliance", "allianceID", "allianceName"),
-                                    ("corporation", "corporationID", "corporationName")):
+            for typ, idk, namek, kind in (("alliance", "allianceID", "allianceName", "alliance"),
+                                          ("corporation", "corporationID", "corporationName", "corporation")):
                 for v in tops.get(typ, [])[:5]:
                     if v.get(idk) in enemy:
-                        assoc_hits.append(f"{v.get(namek)} ({v.get('kills')}×)")
+                        assoc_hits.append(f"{_icon(v.get(idk), kind)}{v.get(namek)} ({v.get('kills')}×)")
             if enemy and assoc_hits:
                 bad += 1
                 flag("bad", "danger", "Vliegt met vijand", ", ".join(dict.fromkeys(assoc_hits)))
             elif tops.get("alliance") or tops.get("corporation"):
-                top = (tops.get("alliance") or tops.get("corporation"))[0]
-                who = top.get("allianceName") or top.get("corporationName") or "?"
-                flag("ok", "success", "Vliegt met (top)", f"{who} ({top.get('kills')}×)")
+                if tops.get("alliance"):
+                    top, idk, namek, kind = tops["alliance"][0], "allianceID", "allianceName", "alliance"
+                else:
+                    top, idk, namek, kind = tops["corporation"][0], "corporationID", "corporationName", "corporation"
+                flag("ok", "success", "Vliegt met (top)",
+                     f"{_icon(top.get(idk), kind)}{top.get(namek) or '?'} ({top.get('kills')}×)")
             # Schipprofiel
             ships = tops.get("shipType", [])[:3]
             if ships:
                 flag("info", "secondary", "Meest gevlogen schepen",
-                     " · ".join(f"{v.get('shipName') or v.get('typeName')} ({v.get('kills')}×)" for v in ships))
+                     " · ".join(f"{_icon(v.get('shipTypeID'), 'type')}{v.get('shipName') or v.get('typeName')} ({v.get('kills')}×)" for v in ships))
             systems = tops.get("solarSystem", [])[:3]
             if systems:
                 flag("info", "secondary", "Actiefste systemen",

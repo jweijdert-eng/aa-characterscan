@@ -181,6 +181,26 @@
 /* Corp/alliance-regel op de recruiter-kaart */
 .cs-app .cs-org { display: flex; align-items: center; flex-wrap: wrap; gap: .2rem .35rem; margin-top: .15rem; }
 .cs-app .cs-org-logo { width: 16px; height: 16px; border-radius: 3px; flex-shrink: 0; }
+.cs-app .cs-org-logo-lg { width: 34px; height: 34px; border-radius: 6px; }
+.cs-app .cs-contact-ico { width: 28px; height: 28px; border-radius: 5px; flex-shrink: 0; border: 1px solid var(--cs-border); }
+.cs-app img.cs-contact-ico.rounded-circle { border-radius: 50%; }
+
+/* Inline-iconen in vetting-waarden (corp/alliance/character/ship) */
+.cs-app .cs-inline-ico {
+    width: 20px; height: 20px;
+    border-radius: 3px;
+    vertical-align: -5px;
+    margin-right: 4px;
+    border: 1px solid var(--cs-border);
+    background: rgba(0, 0, 0, .25);
+}
+.cs-app .cs-inline-ico-round { border-radius: 50%; }
+
+/* Contracts */
+.cs-app .cs-contract-ico { font-size: 1rem; line-height: 1; flex-shrink: 0; }
+.cs-app .cs-contract-title { color: var(--cs-dim); font-weight: 500; }
+.cs-app .cs-contract-parties { margin-top: .3rem; padding-left: 1.6rem; color: var(--cs-text); }
+.cs-app .cs-contract-parties .cs-arrow { color: var(--cs-blue); font-weight: 700; margin: 0 .1rem; }
 .cs-app .cs-corp { color: var(--cs-gold); font-weight: 600; }
 .cs-app .cs-alliance { color: var(--cs-blue); font-weight: 600; }
 .cs-app .cs-org-sep { color: var(--cs-dim); }

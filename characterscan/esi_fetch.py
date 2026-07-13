@@ -570,7 +570,7 @@ def _fetch_live(eve_character, token):
 
     contacts = sorted(
         [{"id": c["contact_id"], "name": name_map.get(c["contact_id"], str(c["contact_id"])),
-          "standing": c["standing"]} for c in contacts_raw],
+          "standing": c["standing"], "type": c.get("contact_type")} for c in contacts_raw],
         key=lambda x: x["standing"], reverse=True,
     )[:100]
 
@@ -689,7 +689,8 @@ def _fetch_memberaudit(eve_character):
         for c in ma.contacts.select_related("eve_entity").order_by("-standing")[:100]:
             contacts.append({"id": c.eve_entity_id,
                              "name": getattr(c.eve_entity, "name", str(c.eve_entity_id)),
-                             "standing": c.standing})
+                             "standing": c.standing,
+                             "type": getattr(c.eve_entity, "category", None)})
     except Exception:
         pass
 

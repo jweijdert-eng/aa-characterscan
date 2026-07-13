@@ -4,7 +4,14 @@ Character Scan is hiermee niet meer afhankelijk van Member Audit-modellen.
 """
 
 from .esi_fetch import get_profile, sov_map
-from .vetting import _location_enemy, _parse_date, _scan_text, mail_is_friendly, trusted_domains
+from .vetting import (
+    _fmt_isk,
+    _location_enemy,
+    _parse_date,
+    _scan_text,
+    mail_is_friendly,
+    trusted_domains,
+)
 
 
 def basic_stats(eve_character):
@@ -84,6 +91,48 @@ def full_profile(eve_character, enemy=None):
         if assets:
             _mark(assets.get("locations"))
 
+    # Wallet-journal → compacte transactielijst voor het wallet-blok
+    cid = p.get("character_id")
+    wallet_entries = []
+    for j in p.get("wallet_journal", [])[:40]:
+        amt = j.get("amount") or 0
+        cp_id = cp_name = None
+        for pid, name in ((j.get("first_party_id"), j.get("first_party_name")),
+                          (j.get("second_party_id"), j.get("second_party_name"))):
+            if pid and pid != cid:
+                cp_id, cp_name = pid, name
+                break
+        wallet_entries.append({
+            "date": _parse_date(j.get("date")),
+            "ref_type": (j.get("ref_type") or "").replace("_", " "),
+            "amount": amt,
+            "amount_fmt": _fmt_isk(amt),
+            "cp_id": cp_id,
+            "cp_name": cp_name,
+            "is_enemy": bool(cp_id) and cp_id in enemy,
+        })
+    journal_all = p.get("wallet_journal", [])
+    income = expense = 0.0
+    by_type = {}
+    for j in journal_all:
+        a = float(j.get("amount") or 0)
+        if a > 0:
+            income += a
+            rt = (j.get("ref_type") or "").replace("_", " ")
+            by_type[rt] = by_type.get(rt, 0.0) + a
+        elif a < 0:
+            expense += a
+    top_sources = sorted(by_type.items(), key=lambda x: x[1], reverse=True)[:5]
+    wallet = {
+        "balance": p.get("wallet"),
+        "entries": wallet_entries,
+        "income_fmt": _fmt_isk(income),
+        "expense_fmt": _fmt_isk(expense),
+        "net_fmt": _fmt_isk(income + expense),
+        "tx_count": len(journal_all),
+        "top_sources": [{"type": t, "amount_fmt": _fmt_isk(v)} for t, v in top_sources],
+    }
+
     return {
         "stats": basic_stats(eve_character),
         "registered": p.get("ok", False),
@@ -106,4 +155,5 @@ def full_profile(eve_character, enemy=None):
         },
         "clones": clones,
         "assets": assets,
+        "wallet": wallet,
     }

@@ -126,8 +126,8 @@
                             <div class="d-flex justify-content-between align-items-center gap-2">
                                 <span class="cs-org {% if h.is_enemy %}text-danger fw-bold{% endif %}">
                                     {% if h.is_enemy %}⚠ {% endif %}
-                                    {% if h.corp_id %}<img src="https://images.evetech.net/corporations/{{ h.corp_id }}/logo?size=32" alt="" class="cs-org-logo">{% endif %}
-                                    {% if h.alliance_id %}<img src="https://images.evetech.net/alliances/{{ h.alliance_id }}/logo?size=32" alt="" class="cs-org-logo" title="{% translate 'alliance' %}">{% endif %}
+                                    {% if h.corp_id %}<img src="https://images.evetech.net/corporations/{{ h.corp_id }}/logo?size=64" alt="" class="cs-org-logo cs-org-logo-lg">{% endif %}
+                                    {% if h.alliance_id %}<img src="https://images.evetech.net/alliances/{{ h.alliance_id }}/logo?size=64" alt="" class="cs-org-logo cs-org-logo-lg" title="{% translate 'alliance' %}">{% endif %}
                                     <span>{{ h.corp_name }}</span>{% if h.is_current %} <span class="badge bg-info">{% translate "huidig" %}</span>{% endif %}
                                 </span>
                                 {% if h.duration_label %}<span class="cs-dur {% if h.duration_days < 14 %}cs-dur-short{% endif %}" title="{{ h.duration_days }} {% translate 'dagen' %}">{{ h.duration_label }}</span>{% endif %}
@@ -173,9 +173,15 @@
                 <div class="card-header">⚖ {% translate "Contacts" %}</div>
                 <ul class="list-group list-group-flush" style="max-height:320px;overflow:auto">
                     {% for ct in profile.contacts %}
-                        <li class="list-group-item d-flex justify-content-between {% if ct.is_enemy and ct.standing > 0 %}list-group-item-danger{% endif %}">
-                            <span class="{% if ct.is_enemy %}text-danger fw-bold{% endif %}">{% if ct.is_enemy %}⚠ {% endif %}{{ ct.name }}</span>
-                            <span class="{% if ct.standing > 0 %}text-success{% elif ct.standing < 0 %}text-danger{% else %}text-muted{% endif %}">{{ ct.standing|floatformat:1 }}</span>
+                        <li class="list-group-item d-flex justify-content-between align-items-center gap-2 {% if ct.is_enemy and ct.standing > 0 %}list-group-item-danger{% endif %}">
+                            <span class="d-inline-flex align-items-center gap-2 {% if ct.is_enemy %}text-danger fw-bold{% endif %}" style="min-width:0">
+                                {% if ct.type == "character" %}<img src="https://images.evetech.net/characters/{{ ct.id }}/portrait?size=32" alt="" class="cs-contact-ico rounded-circle">
+                                {% elif ct.type == "corporation" %}<img src="https://images.evetech.net/corporations/{{ ct.id }}/logo?size=32" alt="" class="cs-contact-ico">
+                                {% elif ct.type == "alliance" %}<img src="https://images.evetech.net/alliances/{{ ct.id }}/logo?size=32" alt="" class="cs-contact-ico">
+                                {% elif ct.type == "faction" %}<img src="https://images.evetech.net/corporations/{{ ct.id }}/logo?size=32" alt="" class="cs-contact-ico">{% endif %}
+                                <span class="text-truncate">{% if ct.is_enemy %}⚠ {% endif %}{{ ct.name }}</span>
+                            </span>
+                            <span class="flex-shrink-0 {% if ct.standing > 0 %}text-success{% elif ct.standing < 0 %}text-danger{% else %}text-muted{% endif %}">{{ ct.standing|floatformat:1 }}</span>
                         </li>
                     {% empty %}
                         <li class="list-group-item text-muted">{% translate "Geen contacts." %}</li>
@@ -188,16 +194,22 @@
                 <div class="card-header">◧ {% translate "Contracts" %}</div>
                 <ul class="list-group list-group-flush" style="max-height:360px;overflow:auto">
                     {% for ct in profile.contracts %}
-                        <li class="list-group-item {% if ct.is_enemy %}list-group-item-danger{% endif %}">
-                            <div class="d-flex justify-content-between">
-                                <span class="fw-semibold">{% if ct.is_enemy %}⚠ {% endif %}{{ ct.type }}{% if ct.title %} — {{ ct.title }}{% endif %}</span>
-                                <span class="text-muted small">{{ ct.status }} · {{ ct.date|date:"d M y" }}</span>
+                        <li class="list-group-item cs-contract {% if ct.is_enemy %}list-group-item-danger{% endif %}">
+                            <div class="d-flex justify-content-between align-items-start gap-2">
+                                <span class="fw-semibold d-inline-flex align-items-center gap-2" style="min-width:0">
+                                    <span class="cs-contract-ico">{% if ct.type == "courier" %}🚚{% elif ct.type == "auction" %}🔨{% elif ct.type == "loan" %}💰{% else %}📦{% endif %}</span>
+                                    <span class="text-truncate">{% if ct.is_enemy %}⚠ {% endif %}{{ ct.type }}{% if ct.title %} <span class="cs-contract-title">— {{ ct.title }}</span>{% endif %}</span>
+                                </span>
+                                <span class="d-inline-flex align-items-center gap-2 flex-shrink-0">
+                                    <span class="badge {% if "finished" in ct.status %}bg-success{% elif ct.status == "outstanding" or ct.status == "in progress" %}bg-info{% elif ct.status == "failed" or ct.status == "rejected" or ct.status == "deleted" or ct.status == "cancelled" or ct.status == "reversed" %}bg-danger{% else %}bg-secondary{% endif %}">{{ ct.status }}</span>
+                                    <span class="text-muted small text-nowrap">{{ ct.date|date:"d M y" }}</span>
+                                </span>
                             </div>
                             {% if ct.issuer or ct.assignee or ct.acceptor %}
-                                <div class="small text-muted">
-                                    {% if ct.issuer %}{% translate "van" %} <span class="{% if ct.issuer_enemy %}text-danger fw-bold{% else %}text-body{% endif %}">{{ ct.issuer }}</span>{% if ct.issuer_corp %} [{{ ct.issuer_corp }}]{% endif %}{% endif %}
-                                    {% if ct.assignee %} → <span class="{% if ct.assignee_enemy %}text-danger fw-bold{% else %}text-body{% endif %}">{{ ct.assignee }}</span>{% if ct.assignee_cat %} <span class="badge bg-secondary">{{ ct.assignee_cat }}</span>{% endif %}{% endif %}
-                                    {% if ct.acceptor %} · {% translate "geaccepteerd door" %} <span class="{% if ct.acceptor_enemy %}text-danger fw-bold{% else %}text-body{% endif %}">{{ ct.acceptor }}</span>{% endif %}
+                                <div class="cs-contract-parties small">
+                                    {% if ct.issuer %}<span class="{% if ct.issuer_enemy %}text-danger fw-bold{% endif %}">{{ ct.issuer }}</span>{% if ct.issuer_corp %} <span class="text-muted">[{{ ct.issuer_corp }}]</span>{% endif %}{% endif %}
+                                    {% if ct.assignee %}<span class="cs-arrow">→</span> <span class="{% if ct.assignee_enemy %}text-danger fw-bold{% endif %}">{{ ct.assignee }}</span>{% if ct.assignee_cat %} <span class="badge bg-secondary">{{ ct.assignee_cat }}</span>{% endif %}{% endif %}
+                                    {% if ct.acceptor %} <span class="text-muted">· {% translate "door" %}</span> <span class="{% if ct.acceptor_enemy %}text-danger fw-bold{% endif %}">{{ ct.acceptor }}</span>{% endif %}
                                 </div>
                             {% endif %}
                         </li>
@@ -257,6 +269,48 @@
                     {% if profile.assets.location_count > 25 %}
                         <li class="list-group-item text-muted small">{% blocktranslate with n=profile.assets.location_count %}…top 25 van {{ n }} locaties{% endblocktranslate %}</li>
                     {% endif %}
+                </ul>
+            </div>
+        </div>
+
+        {# Wallet #}
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">💰 {% translate "Wallet" %}
+                    {% if profile.wallet.balance != None %}<span class="cs-isk ms-1">{{ profile.wallet.balance|floatformat:0|intcomma }} ISK</span>{% else %}<span class="text-muted ms-1">🔒</span>{% endif %}
+                </div>
+                {% if profile.wallet.entries %}
+                    <div class="card-body pb-2">
+                        <div class="cs-stats">
+                            <span class="cs-stat"><span class="l">{% translate "in" %}</span><span class="v text-cs-green">{{ profile.wallet.income_fmt }}</span></span>
+                            <span class="cs-stat"><span class="l">{% translate "uit" %}</span><span class="v text-cs-red">{{ profile.wallet.expense_fmt }}</span></span>
+                            <span class="cs-stat"><span class="l">{% translate "netto" %}</span><span class="v">{{ profile.wallet.net_fmt }}</span></span>
+                            <span class="cs-stat"><span class="l">{% translate "transacties" %}</span><span class="v">{{ profile.wallet.tx_count }}</span></span>
+                        </div>
+                        {% if profile.wallet.top_sources %}
+                            <div class="small text-muted mt-2">{% translate "Top inkomsten" %}:
+                                {% for s in profile.wallet.top_sources %}<span class="badge bg-dark ms-1">{{ s.type }} · <span class="cs-isk">{{ s.amount_fmt }}</span></span>{% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                {% endif %}
+                <ul class="list-group list-group-flush" style="max-height:340px;overflow:auto">
+                    {% for e in profile.wallet.entries %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center gap-2 {% if e.is_enemy %}list-group-item-danger{% endif %}">
+                            <span class="d-inline-flex flex-column" style="min-width:0">
+                                {% if e.cp_name %}
+                                    <span class="text-truncate {% if e.is_enemy %}text-danger fw-bold{% endif %}">{% if e.is_enemy %}⚠ {% endif %}{{ e.cp_name }}</span>
+                                    <span class="small text-muted">{{ e.ref_type }} · {{ e.date|date:"d M Y H:i" }}</span>
+                                {% else %}
+                                    <span class="text-truncate text-capitalize">{{ e.ref_type|default:"transactie" }}</span>
+                                    <span class="small text-muted">{{ e.date|date:"d M Y H:i" }}</span>
+                                {% endif %}
+                            </span>
+                            <span class="flex-shrink-0 fw-semibold text-nowrap {% if e.amount > 0 %}text-cs-green{% elif e.amount < 0 %}text-cs-red{% endif %}">{{ e.amount_fmt }} ISK</span>
+                        </li>
+                    {% empty %}
+                        <li class="list-group-item text-muted">{% translate "Geen transacties (of wallet-scope niet verleend)." %}</li>
+                    {% endfor %}
                 </ul>
             </div>
         </div>
