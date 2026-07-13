@@ -87,17 +87,22 @@ def apply(request: WSGIRequest) -> HttpResponse:
 def recruiter_list(request: WSGIRequest) -> HttpResponse:
     """Overzicht van alle aanmeldingen voor recruiters."""
     status = request.GET.get("status", "new")
-    qs = Recruit.objects.select_related("eve_character")
-    counts = {row["status"]: row["n"] for row in qs.values("status").annotate(n=Count("id"))}
-    counts["all"] = sum(counts.get(s, 0) for s in ("new", "accepted", "rejected"))
+    base = Recruit.objects.select_related("eve_character")
+    counts = {row["status"]: row["n"] for row in base.values("status").annotate(n=Count("id"))}
+    # Afgerond = verwerkt (aangenomen óf afgewezen); zo blijft "Nieuw" schoon.
+    counts["afgerond"] = counts.get("accepted", 0) + counts.get("rejected", 0)
+    counts["all"] = counts.get("new", 0) + counts["afgerond"]
     filters = [
         {"key": "new", "label": _("Nieuw"), "count": counts.get("new", 0), "color": "warning"},
-        {"key": "accepted", "label": _("Aangenomen"), "count": counts.get("accepted", 0), "color": "success"},
-        {"key": "rejected", "label": _("Afgewezen"), "count": counts.get("rejected", 0), "color": "danger"},
+        {"key": "afgerond", "label": _("Afgerond"), "count": counts.get("afgerond", 0), "color": "success"},
         {"key": "all", "label": _("Totaal"), "count": counts.get("all", 0), "color": "info"},
     ]
-    if status in ("new", "accepted", "rejected"):
-        qs = qs.filter(status=status)
+    if status == "afgerond":
+        qs = base.filter(status__in=("accepted", "rejected"))
+    elif status in ("new", "accepted", "rejected"):
+        qs = base.filter(status=status)  # directe deep-links blijven werken
+    else:
+        qs = base
 
     recruiter_char = getattr(request.user.profile, "main_character", None)
     enemy = enemy_set(recruiter_char)
