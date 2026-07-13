@@ -38,6 +38,8 @@ CS_RECRUIT_SCOPES = [
     "esi-location.read_ship_type.v1",
     "esi-clones.read_clones.v1",
     "esi-mail.read_mail.v1",
+    "esi-assets.read_assets.v1",
+    "esi-universe.read_structures.v1",
 ]
 
 # Skill-injector-types (vaste ESI type_ids)
@@ -149,6 +151,73 @@ def _names(ids):
     return names
 
 
+def sov_map():
+    """{solar_system_id: alliance_id} uit de sovereignty-map (publiek, sterk gecached)."""
+    key = "cs_sov_map"
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
+    out = {}
+    try:
+        r = requests.get(f"{ESI}/sovereignty/map/?datasource=tranquility", headers=UA, timeout=15)
+        if r.ok:
+            for row in r.json():
+                if row.get("alliance_id"):
+                    out[row["system_id"]] = row["alliance_id"]
+    except Exception:
+        pass
+    cache.set(key, out, 6 * 3600)
+    return out
+
+
+def resolve_location(location_id, access=None):
+    """Station/structure-id → {name, system_id, owner_corp_id} (gecached). None = onbekend."""
+    if not location_id:
+        return None
+    key = f"cs_loc_{location_id}"
+    cached = cache.get(key)
+    if cached is not None:
+        return cached or None
+    info = None
+    try:
+        if location_id > 1_000_000_000_000:  # player-structure (citadel)
+            if access:
+                r = requests.get(
+                    f"{ESI}/universe/structures/{location_id}/?datasource=tranquility",
+                    headers={**UA, "Authorization": f"Bearer {access}"}, timeout=8)
+                if r.ok:
+                    d = r.json()
+                    info = {"name": d.get("name"), "system_id": d.get("solar_system_id"),
+                            "owner_corp_id": d.get("owner_id"), "kind": "structure"}
+        elif 60_000_000 <= location_id < 64_000_000:  # NPC-station
+            r = requests.get(f"{ESI}/universe/stations/{location_id}/?datasource=tranquility",
+                             headers=UA, timeout=8)
+            if r.ok:
+                d = r.json()
+                info = {"name": d.get("name"), "system_id": d.get("system_id"),
+                        "owner_corp_id": d.get("owner"), "kind": "station"}
+    except Exception:
+        pass
+    cache.set(key, info or {}, 7 * 86400)
+    return info
+
+
+def _affiliations(char_ids):
+    """character_id → (corporation_id, alliance_id) via één POST (publiek, geen auth)."""
+    ids = list({c for c in char_ids if c})
+    out = {}
+    for i in range(0, len(ids), 1000):
+        try:
+            r = requests.post(f"{ESI}/characters/affiliation/?datasource=tranquility",
+                              json=ids[i:i + 1000], headers=UA, timeout=8)
+            if r.ok:
+                for x in r.json():
+                    out[x["character_id"]] = (x.get("corporation_id"), x.get("alliance_id"))
+        except Exception:
+            pass
+    return out
+
+
 def _skill_types(type_ids):
     """type_id → eveuniverse EveType (bulk uit DB; ontbrekende via ESI). Snel."""
     from eveuniverse.models import EveType
@@ -245,6 +314,55 @@ def _strip_html(html):
     return h.strip()
 
 
+def _process_clones(clones_raw, access):
+    """Clones-endpoint → {jump_count, home, locations[]} met geresolvede locaties."""
+    if not isinstance(clones_raw, dict):
+        return None
+    home = clones_raw.get("home_location") or {}
+    jcs = clones_raw.get("jump_clones") or []
+    loc_ids = {j.get("location_id") for j in jcs if j.get("location_id")}
+    if home.get("location_id"):
+        loc_ids.add(home["location_id"])
+    resolved = _parallel(
+        {lid: (lambda l=lid: resolve_location(l, access)) for lid in loc_ids}, max_workers=8
+    ) if loc_ids else {}
+
+    def loc(lid):
+        r = resolved.get(lid) or {}
+        return {"location_id": lid, "name": r.get("name"), "system_id": r.get("system_id"),
+                "owner_corp_id": r.get("owner_corp_id"), "kind": r.get("kind")}
+
+    return {
+        "jump_count": len(jcs),
+        "home": ({**loc(home["location_id"]), "type": home.get("location_type")}
+                 if home.get("location_id") else None),
+        "locations": [{**loc(j.get("location_id")), "type": j.get("location_type"),
+                       "implants": len(j.get("implants", []))} for j in jcs],
+    }
+
+
+def _process_assets(assets_raw, access):
+    """Assets → {count, location_count, locations[]} met geresolvede top-locaties."""
+    if not assets_raw:
+        return None
+    item_ids = {a.get("item_id") for a in assets_raw}
+    counts = {}
+    for a in assets_raw:
+        lid = a.get("location_id")
+        if lid and lid not in item_ids:  # top-level locatie (niet in een container/schip)
+            counts[lid] = counts.get(lid, 0) + 1
+    top = sorted(counts.items(), key=lambda x: x[1], reverse=True)[:25]
+    resolved = _parallel(
+        {lid: (lambda l=lid: resolve_location(l, access)) for lid, _ in top}, max_workers=10
+    ) if top else {}
+    locations = []
+    for lid, n in top:
+        r = resolved.get(lid) or {}
+        locations.append({"location_id": lid, "name": r.get("name"), "system_id": r.get("system_id"),
+                          "owner_corp_id": r.get("owner_corp_id"), "kind": r.get("kind"), "item_count": n})
+    return {"count": len(assets_raw), "location_count": len(counts), "locations": locations}
+
+
 # ── LIVE ophalen via ESI ─────────────────────────────────────────────────────
 def _fetch_live(eve_character, token):
     cid = eve_character.character_id
@@ -263,6 +381,8 @@ def _fetch_live(eve_character, token):
         "ship": lambda: _auth(f"/characters/{cid}/ship/", access),
         "hist": lambda: _pub(f"/characters/{cid}/corporationhistory/"),
         "mail": lambda: _auth(f"/characters/{cid}/mail/", access),
+        "clones": lambda: _auth(f"/characters/{cid}/clones/", access),
+        "assets": lambda: _auth(f"/characters/{cid}/assets/", access, paged=True),
     })
     info = res["info"]
     wallet = res["wallet"]
@@ -275,6 +395,8 @@ def _fetch_live(eve_character, token):
     ship = res["ship"]
     hist_raw = res["hist"] or []
     mail_raw = res["mail"]
+    clones = _process_clones(res["clones"], access)
+    assets = _process_assets(res["assets"] if isinstance(res["assets"], list) else [], access)
 
     skills = (skills_raw or {}).get("skills", []) if isinstance(skills_raw, dict) else []
     contacts_raw = contacts_raw if isinstance(contacts_raw, list) else []
@@ -308,8 +430,25 @@ def _fetch_live(eve_character, token):
         ids.update(filter(None, [loc.get("solar_system_id"), loc.get("station_id")]))
     if ship:
         ids.add(ship.get("ship_type_id"))
+    for coll in (clones, assets):
+        if coll:
+            locs = list(coll.get("locations") or [])
+            if coll.get("home"):
+                locs.append(coll["home"])
+            for lc in locs:
+                ids.update(filter(None, [lc.get("owner_corp_id"), lc.get("system_id")]))
     ids.discard(None)
     name_map = _names(ids)
+
+    # Eigenaar-/systeemnamen aan de clone-/asset-locaties hangen
+    for coll in (clones, assets):
+        if coll:
+            locs = list(coll.get("locations") or [])
+            if coll.get("home"):
+                locs.append(coll["home"])
+            for lc in locs:
+                lc["owner_name"] = name_map.get(lc.get("owner_corp_id"))
+                lc["system_name"] = name_map.get(lc.get("system_id"))
 
     # Mails: koppen + (per mail) de body parallel ophalen en strippen
     def _body(m):
@@ -328,6 +467,11 @@ def _fetch_live(eve_character, token):
         "date": m.get("timestamp"),
         "body": body,
     } for m, body in zip(recent_mails, bodies)]
+    # Affiliatie van de afzenders (corp/alliance) — om eigen/blauwe afzenders te herkennen
+    aff = _affiliations([mm["from_id"] for mm in mails])
+    for mm in mails:
+        c, a = aff.get(mm["from_id"], (None, None))
+        mm["from_corp_id"], mm["from_alliance_id"] = c, a
 
     # Corp-historie + alliance per corp (alliance-lookups parallel)
     from .vetting import corp_alliance, _parse_date  # hergebruik gecachte lookup
@@ -432,6 +576,8 @@ def _fetch_live(eve_character, token):
         "wallet_journal": journal,
         "mails": mails,
         "skill_injectors": skill_injectors,
+        "clones": clones,
+        "assets": assets,
         "ship_type_id": ship.get("ship_type_id") if ship else None,
         "ship_type_name": name_map.get(ship.get("ship_type_id")) if ship else None,
         "ship_name": ship.get("ship_name") if ship else None,  # speler-gegeven naam
@@ -556,6 +702,7 @@ def _fetch_memberaudit(eve_character):
         "skill_groups": skill_groups, "risk_skills": risk_skills,
         "contacts": contacts, "contracts": contracts,
         "corp_history": corp_history, "wallet_journal": journal,
+        "clones": None, "assets": None,
         "ship_type_id": None, "ship_type_name": None, "ship_name": None,
         "system_id": None, "location_name": None, "station_name": None, "docked": False,
     }
@@ -572,6 +719,7 @@ def _empty(eve_character):
         "sec": None, "age_years": None, "wallet": None, "total_sp": None, "unallocated_sp": None, "skill_count": None,
         "skill_groups": [], "risk_skills": [], "contacts": [], "contracts": [],
         "corp_history": [], "wallet_journal": [],
+        "clones": None, "assets": None,
         "ship_type_id": None, "ship_type_name": None, "ship_name": None,
         "system_id": None, "location_name": None, "station_name": None, "docked": False,
     }

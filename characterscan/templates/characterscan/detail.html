@@ -208,12 +208,13 @@
                     {% for m in profile.mails %}
                         <li class="list-group-item {% if m.is_enemy %}list-group-item-danger{% endif %}">
                             <div class="d-flex justify-content-between align-items-start gap-2">
-                                <span class="fw-semibold {% if m.is_enemy %}text-danger{% endif %}">{% if m.is_enemy or m.suspect %}⚠ {% endif %}{{ m.subject|default:"(geen onderwerp)" }}</span>
+                                <span class="fw-semibold {% if m.is_enemy %}text-danger{% endif %}">{% if m.is_enemy or m.suspect %}⚠ {% else %}<span class="text-cs-green">✓</span> {% endif %}{{ m.subject|default:"(geen onderwerp)" }}</span>
                                 <span class="text-muted small text-nowrap">{{ m.date_parsed|date:"d M Y H:i" }}</span>
                             </div>
                             <div class="small text-muted mt-1">
                                 {% translate "van" %} <span class="{% if m.is_enemy %}text-danger fw-bold{% else %}text-body{% endif %}">{{ m.from_name|default:"?" }}</span>
                                 {% if m.from_standing != None %}<span class="badge ms-1 {% if m.from_standing > 0 %}bg-success{% elif m.from_standing < 0 %}bg-danger{% else %}bg-secondary{% endif %}" title="{% translate 'eigen standing t.o.v. afzender' %}">{% translate "standing" %} {{ m.from_standing|floatformat:1 }}</span>{% endif %}
+                                {% if m.friendly %}<span class="badge bg-secondary ms-1" title="{% translate 'eigen corp/alliance of blauwe afzender — niet op termen/links gescand' %}">{% translate "intern" %}</span>{% endif %}
                                 {% if m.is_enemy %}<span class="badge bg-danger ms-1">{% translate "vijand" %}</span>{% endif %}
                                 {% for t in m.suspect %}<span class="badge bg-warning ms-1">{{ t }}</span>{% endfor %}
                             </div>
@@ -228,46 +229,6 @@
                         <li class="list-group-item text-muted">{% translate "Geen mails opgehaald — recruit heeft de mail-scope niet verleend of heeft geen recente mails." %}</li>
                     {% endfor %}
                 </ul>
-            </div>
-        </div>
-
-        {# Log & notities #}
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">📝 {% translate "Log & notities" %}</div>
-                <div class="card-body">
-                    <form method="post" action="{% url 'characterscan:recruit_action' recruit.pk %}" class="mb-3">
-                        {% csrf_token %}
-                        <input type="hidden" name="next" value="{% url 'characterscan:recruit_detail' recruit.pk %}">
-                        <textarea name="comment" class="form-control mb-2" rows="2"
-                                  placeholder="{% translate 'Opmerking (optioneel) — bijv. reden van aannemen/afwijzen…' %}"></textarea>
-                        <div class="d-flex gap-2 flex-wrap">
-                            <button name="action" value="accepted" class="btn btn-success btn-sm">✓ {% translate "Aannemen" %}</button>
-                            <button name="action" value="rejected" class="btn btn-outline-danger btn-sm">✕ {% translate "Afwijzen" %}</button>
-                            <button name="action" value="note" class="btn btn-outline-secondary btn-sm">💬 {% translate "Notitie toevoegen" %}</button>
-                        </div>
-                    </form>
-
-                    <ul class="list-group list-group-flush" style="max-height:360px;overflow:auto">
-                        {% for e in recruit.log_entries.all %}
-                            <li class="list-group-item">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <span>
-                                        {% if e.action == "accepted" %}<span class="badge bg-success">{{ e.get_action_display }}</span>
-                                        {% elif e.action == "rejected" %}<span class="badge bg-danger">{{ e.get_action_display }}</span>
-                                        {% elif e.action == "note" %}<span class="badge bg-secondary">{{ e.get_action_display }}</span>
-                                        {% else %}<span class="badge bg-info">{{ e.get_action_display }}</span>{% endif %}
-                                        <span class="text-body ms-1">{{ e.actor_name }}</span>
-                                    </span>
-                                    <span class="text-muted small">{{ e.created_at|date:"d M Y H:i" }}</span>
-                                </div>
-                                {% if e.comment %}<div class="small mt-1">{{ e.comment }}</div>{% endif %}
-                            </li>
-                        {% empty %}
-                            <li class="list-group-item text-muted">{% translate "Nog geen acties gelogd." %}</li>
-                        {% endfor %}
-                    </ul>
-                </div>
             </div>
         </div>
     </div>

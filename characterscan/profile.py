@@ -4,7 +4,7 @@ Character Scan is hiermee niet meer afhankelijk van Member Audit-modellen.
 """
 
 from .esi_fetch import get_profile
-from .vetting import _parse_date, _scan_text
+from .vetting import _parse_date, _scan_text, mail_is_friendly, trusted_domains
 
 
 def basic_stats(eve_character):
@@ -42,18 +42,20 @@ def full_profile(eve_character, enemy=None):
         c["is_enemy"] = c["issuer_enemy"] or c["assignee_enemy"] or c["acceptor_enemy"]
 
     standing_by_id = {c.get("id"): c.get("standing") for c in p.get("contacts", [])}
+    trusted = trusted_domains()
     mails = p.get("mails", [])
     for m in mails:
-        m["suspect"] = sorted(_scan_text((m.get("subject") or "") + " " + (m.get("body") or "")))
         parties = [m.get("from_id")] + (m.get("recipient_ids") or [])
         m["is_enemy"] = any(pid in enemy for pid in parties if pid)
         m["date_parsed"] = _parse_date(m.get("date"))
         # Eigen standing van de recruit t.o.v. de mail-correspondenten (afzender eerst)
-        standings = [standing_by_id.get(pid) for pid in parties if pid in standing_by_id]
         m["from_standing"] = standing_by_id.get(m.get("from_id"))
-        m["standing"] = m["from_standing"] if m["from_standing"] is not None else (
-            standings[0] if standings else None
-        )
+        m["standing"] = m["from_standing"] if m["from_standing"] is not None else next(
+            (standing_by_id.get(pid) for pid in parties if pid in standing_by_id), None)
+        # Van eigen corp/alliance of blauwe afzender? → niet op termen/links scannen
+        m["friendly"] = mail_is_friendly(m, p, standing_by_id)
+        m["suspect"] = [] if m["friendly"] else sorted(_scan_text(
+            (m.get("subject") or "") + " " + (m.get("body") or ""), trusted))
 
     return {
         "stats": basic_stats(eve_character),

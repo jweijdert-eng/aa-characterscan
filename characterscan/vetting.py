@@ -16,7 +16,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
 
-from .esi_fetch import get_profile, ma_character
+from .esi_fetch import get_profile, ma_character, sov_map
 
 UA = {"User-Agent": "aa-characterscan (local eval)"}
 
@@ -29,34 +29,103 @@ VERDICTS = {
 CORP_CONTACTS_SCOPE = "esi-corporations.read_contacts.v1"
 ALLIANCE_CONTACTS_SCOPE = "esi-alliances.read_contacts.v1"
 
-# Verdachte termen in mailinhoud (spy/intel/externe comms) — voor de mail-scan.
+# Verdachte termen in mailinhoud — bewust conservatief (échte spy-signalen).
+# Generieke fleet-woorden (intel, titan, supers, comms-apps) geven te veel
+# false positives op normale corp-mail en zitten hier daarom NIET in.
 SUSPECT_TERMS = [
+    # Spionage / infiltratie (EN + NL)
     (re.compile(r"\bspy(ing|s)?\b", re.I), "spy"),
-    (re.compile(r"\bawox", re.I), "awox"),
-    (re.compile(r"\bintel\b", re.I), "intel"),
-    (re.compile(r"\bmole\b", re.I), "mole"),
-    (re.compile(r"infiltrat", re.I), "infiltrate"),
-    (re.compile(r"hot[- ]?drop", re.I), "hotdrop"),
+    (re.compile(r"\bspai\b", re.I), "spai"),
+    (re.compile(r"\bspion", re.I), "spion"),                       # NL: spion/spionage
+    (re.compile(r"spy[- ]?alt", re.I), "spy alt"),
+    (re.compile(r"double[- ]?agent|dubbelspion", re.I), "double agent"),
+    (re.compile(r"\binformant", re.I), "informant"),
+    (re.compile(r"sleeper[- ]?agent", re.I), "sleeper agent"),
+    (re.compile(r"undercover", re.I), "undercover"),
+    (re.compile(r"infiltrat|\binfiltrant", re.I), "infiltrate"),
+    (re.compile(r"\bmole\b|\bmol\b", re.I), "mole"),               # NL: mol
     (re.compile(r"honeypot", re.I), "honeypot"),
+    # Verraad / overlopen / sabotage
+    (re.compile(r"\bawox", re.I), "awox"),
+    (re.compile(r"turncoat", re.I), "turncoat"),
+    (re.compile(r"backstab", re.I), "backstab"),
+    (re.compile(r"\bbetray", re.I), "betray"),
+    (re.compile(r"verrad|verraad", re.I), "verraad"),             # NL: verrader/verraden/verraad
+    (re.compile(r"\bdefector\b|\bdefect(ing|ed)?\s+to\b", re.I), "defector"),
+    (re.compile(r"overlop|overgelop", re.I), "overlopen"),        # NL: overlopen/overgelopen
+    (re.compile(r"sabot(age|eur|eren)", re.I), "sabotage"),
+    # Diefstal / scam / omkoping
+    (re.compile(r"\bheist", re.I), "heist"),
+    (re.compile(r"\bthie(f|ves)\b|\btheft\b", re.I), "theft"),
+    (re.compile(r"embezzl", re.I), "embezzle"),
+    (re.compile(r"\bscam", re.I), "scam"),
+    (re.compile(r"\bbrib(e|ing|ed|ery)", re.I), "bribe"),
+    (re.compile(r"omkop|omgekocht", re.I), "omkoop"),            # NL: omkopen/omgekocht
+    (re.compile(r"\bransom", re.I), "ransom"),
+    # Intel lekken / hunten
+    (re.compile(r"\bleak(s|ing|ed)?\b", re.I), "leak"),
+    (re.compile(r"lekken|gelekt|lekte", re.I), "lekken"),        # NL: lekken/gelekt
+    (re.compile(r"feed(ing)?\s+intel|intel\s+feed", re.I), "feed intel"),
+    (re.compile(r"watch[- ]?list", re.I), "watchlist"),
+    (re.compile(r"locator\s+agent", re.I), "locator"),
+    # Cyno-hinderlaag
+    (re.compile(r"hot[- ]?drop", re.I), "hotdrop"),
     (re.compile(r"cyno\s*alt", re.I), "cyno alt"),
-    (re.compile(r"\btitan\b", re.I), "titan"),
-    (re.compile(r"supercarrier|\bsupers?\b", re.I), "supers"),
-    (re.compile(r"discord(\.gg|app\.com)?", re.I), "Discord"),
-    (re.compile(r"teamspeak|ts3", re.I), "TeamSpeak"),
-    (re.compile(r"mumble", re.I), "Mumble"),
 ]
 URL_RE = re.compile(r"https?://[^\s\"'<>]+", re.I)
 
+# Vertrouwde domeinen: links hierheen tellen niet als 'externe link'.
+# Uitbreidbaar via settings.CHARACTERSCAN_TRUSTED_LINK_DOMAINS.
+DEFAULT_TRUSTED_DOMAINS = [
+    "insidiousevil.org", "dutchlegionsdashboard.eu",
+    "eveonline.com", "zkillboard.com", "evewho.com",
+    "dotlan.evemaps.net", "everef.net",
+]
 
-def _scan_text(txt):
-    """Verdachte termen + externe links in een stuk tekst → set labels."""
+
+def trusted_domains():
+    extra = getattr(settings, "CHARACTERSCAN_TRUSTED_LINK_DOMAINS", None) or []
+    return set(DEFAULT_TRUSTED_DOMAINS) | {str(d).lower().strip().lstrip(".") for d in extra}
+
+
+def _url_host(url):
+    m = re.match(r"https?://([^/\s:]+)", url, re.I)
+    return m.group(1).lower() if m else ""
+
+
+def _untrusted_link(txt, trusted):
+    """True als er een link naar een niet-vertrouwd domein in de tekst staat."""
+    for u in URL_RE.findall(txt or ""):
+        host = _url_host(u)
+        if host and not any(host == d or host.endswith("." + d) for d in trusted):
+            return True
+    return False
+
+
+def _scan_text(txt, trusted=None):
+    """Verdachte termen + niet-vertrouwde externe links in een tekst → set labels."""
     hits = set()
     for rx, label in SUSPECT_TERMS:
         if rx.search(txt or ""):
             hits.add(label)
-    if URL_RE.search(txt or ""):
+    if _untrusted_link(txt, trusted if trusted is not None else trusted_domains()):
         hits.add("externe link")
     return hits
+
+
+def mail_is_friendly(mail, profile, standing_by_id=None):
+    """Mail van eigen corp/alliance of een blauwe (positieve standing) afzender?"""
+    fid = mail.get("from_id")
+    if standing_by_id is None:
+        standing_by_id = {c.get("id"): c.get("standing") for c in profile.get("contacts", [])}
+    if (standing_by_id.get(fid) or 0) > 0:
+        return True
+    rc, ra = profile.get("corp_id"), profile.get("alliance_id")
+    if mail.get("from_corp_id") and mail.get("from_corp_id") == rc:
+        return True
+    if mail.get("from_alliance_id") and ra and mail.get("from_alliance_id") == ra:
+        return True
+    return False
 
 
 # ── Datum/ISK-helpers ────────────────────────────────────────────────────────
@@ -243,6 +312,23 @@ def enemy_set(recruiter_eve_character=None):
 
 
 # ── Analyse op het canonieke data-dict ───────────────────────────────────────
+def _location_enemy(loc, enemy, sov):
+    """→ (is_vijand, reden) voor een clone-/asset-locatie (structure-eigenaar of sov)."""
+    if not loc or not enemy:
+        return False, None
+    owner = loc.get("owner_corp_id")
+    sys_id = loc.get("system_id")
+    if owner and owner in enemy:
+        return True, f"structure van {enemy[owner]}"
+    if owner:
+        aid = corp_alliance(owner)
+        if aid and aid in enemy:
+            return True, f"structure-alliance {enemy[aid]}"
+    if sys_id and sov.get(sys_id) in enemy:
+        return True, f"vijandelijke sov ({enemy[sov[sys_id]]})"
+    return False, None
+
+
 def enemy_hits(profile, enemy):
     """Bad-signalen tegen de vijandenlijst (corp + alliance, huidig + historisch)."""
     hits = {"current": [], "history": [], "blue": [], "contracts": []}
@@ -478,17 +564,23 @@ def assess(eve_character, enemy, with_zkill=True):
                  f"<b>{effective/1e6:.0f}M SP</b> in {age} jaar — meer dan natuurlijk mogelijk "
                  f"(~{est} injectors geschat)")
 
-    # Mail-scan: verdachte termen/externe links + mailcontact met vijanden
+    # Mail-scan: verdachte termen/externe links (van niet-blauwe afzenders)
+    #            + mailcontact met vijanden
     mails = profile.get("mails", [])
     if mails:
+        standing_by_id = {c.get("id"): c.get("standing") for c in profile.get("contacts", [])}
+        trusted = trusted_domains()
+        scanned = [m for m in mails if not mail_is_friendly(m, profile, standing_by_id)]
         all_terms = set()
-        for m in mails:
-            all_terms |= _scan_text((m.get("subject", "") + " " + m.get("body", "")))
+        for m in scanned:
+            all_terms |= _scan_text((m.get("subject", "") + " " + m.get("body", "")), trusted)
         if all_terms:
             warn += 1
             flag("warn", "warning", "Verdachte mails", ", ".join(sorted(all_terms)))
         else:
-            flag("ok", "success", "Mails", "Geen verdachte termen of externe links")
+            skipped = len(mails) - len(scanned)
+            extra = f" ({skipped} van eigen/blauwe afzender overgeslagen)" if skipped else ""
+            flag("ok", "success", "Mails", "Geen verdachte termen of externe links" + extra)
         if enemy:
             hits = []
             for m in mails:
@@ -502,21 +594,87 @@ def assess(eve_character, enemy, with_zkill=True):
             else:
                 flag("ok", "success", "Mail met vijand", "Geen mailcontact met bekende vijanden")
 
-    # zKillboard
+    # Jump clones + assets in vijandelijk gebied (structure-eigenaar of sov)
+    clones = profile.get("clones")
+    assets = profile.get("assets")
+    if clones or assets:
+        sov = sov_map()
+        if clones:
+            home = clones.get("home")
+            locs = list(clones.get("locations") or []) + ([home] if home else [])
+            hits = []
+            for lc in locs:
+                is_en, reason = _location_enemy(lc, enemy, sov)
+                if is_en:
+                    hits.append(f"{lc.get('name') or lc.get('system_name') or '?'} — {reason}")
+            if enemy and hits:
+                bad += 1
+                flag("bad", "danger", "Clone in vijandgebied", "; ".join(list(dict.fromkeys(hits))[:5]))
+            else:
+                flag("ok", "success", "Jump clones",
+                     f"{clones.get('jump_count', 0)} clones — geen in vijandgebied")
+        if assets:
+            hits = []
+            for lc in assets.get("locations", []):
+                is_en, reason = _location_enemy(lc, enemy, sov)
+                if is_en:
+                    hits.append(f"{lc.get('name') or lc.get('system_name') or '?'} "
+                                f"({lc.get('item_count')} items) — {reason}")
+            if enemy and hits:
+                bad += 1
+                flag("bad", "danger", "Assets in vijandgebied", "; ".join(list(dict.fromkeys(hits))[:5]))
+            else:
+                flag("ok", "success", "Assets",
+                     f"{assets.get('count', 0)} items in {assets.get('location_count', 0)} locaties")
+
+    # zKillboard: stats + associates (met wie vliegt hij) + schip-/activiteitsprofiel
     if with_zkill:
         zk = _zkill(eve_character.character_id)
-        if zk:
+        if not zk:
+            flag("info", "secondary", "zKillboard", "kon niet geladen worden")
+        else:
             destroyed = zk.get("shipsDestroyed", 0) or 0
             lost = zk.get("shipsLost", 0) or 0
             danger = zk.get("dangerRatio", 0)
+            gang = zk.get("gangRatio", 0)
             solo = zk.get("soloKills", 0) or 0
             if destroyed + lost == 0:
                 flag("info", "secondary", "zKillboard", "Geen PvP-historie")
             else:
                 flag("info", "secondary", "zKillboard",
-                     f"<b>{destroyed}</b> kills / <b>{lost}</b> losses · danger {danger}% · {solo} solo")
-        else:
-            flag("info", "secondary", "zKillboard", "kon niet geladen worden")
+                     f"<b>{destroyed}</b> kills / <b>{lost}</b> losses · danger {danger}% · gang {gang}% · {solo} solo")
+
+            tops = {t.get("type"): (t.get("values") or []) for t in zk.get("topLists", [])}
+            # Associates: top-alliances/corps op zijn killmails — vijandig?
+            assoc_hits = []
+            for typ, idk, namek in (("alliance", "allianceID", "allianceName"),
+                                    ("corporation", "corporationID", "corporationName")):
+                for v in tops.get(typ, [])[:5]:
+                    if v.get(idk) in enemy:
+                        assoc_hits.append(f"{v.get(namek)} ({v.get('kills')}×)")
+            if enemy and assoc_hits:
+                bad += 1
+                flag("bad", "danger", "Vliegt met vijand", ", ".join(dict.fromkeys(assoc_hits)))
+            elif tops.get("alliance") or tops.get("corporation"):
+                top = (tops.get("alliance") or tops.get("corporation"))[0]
+                who = top.get("allianceName") or top.get("corporationName") or "?"
+                flag("ok", "success", "Vliegt met (top)", f"{who} ({top.get('kills')}×)")
+            # Schipprofiel
+            ships = tops.get("shipType", [])[:3]
+            if ships:
+                flag("info", "secondary", "Meest gevlogen schepen",
+                     " · ".join(f"{v.get('shipName') or v.get('typeName')} ({v.get('kills')}×)" for v in ships))
+            systems = tops.get("solarSystem", [])[:3]
+            if systems:
+                flag("info", "secondary", "Actiefste systemen",
+                     " · ".join(f"{v.get('solarSystemName')} ({v.get('kills')}×)" for v in systems))
+            # Recente activiteit / inactiviteit
+            recent = ((zk.get("activepvp") or {}).get("kills") or {}).get("count", 0)
+            if destroyed + lost > 0 and not recent:
+                warn += 1
+                flag("warn", "warning", "Activiteit", "Geen recente PvP — mogelijk inactief/slapend")
+            elif recent:
+                flag("ok", "success", "Recente activiteit", f"{recent} kills recent")
 
     # Vijand-checks
     if not enemy:
