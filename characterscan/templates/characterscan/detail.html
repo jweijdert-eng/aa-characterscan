@@ -34,6 +34,17 @@
                     <input type="hidden" name="next" value="{% url 'characterscan:recruit_detail' recruit.pk %}">
                     <button class="btn btn-outline-danger btn-sm">✕ {% translate "Afwijzen" %}</button>
                 </form>
+                {% if blacklist_available %}
+                    {% if already_blacklisted %}
+                        <span class="badge bg-danger align-self-center">⛔ {% translate "Op blacklist" %}</span>
+                    {% elif perms.blacklist.add_to_blacklist %}
+                        <form method="post" action="{% url 'characterscan:blacklist_recruit' recruit.pk %}" class="cs-bl-form">
+                            {% csrf_token %}
+                            <input type="hidden" name="comment" value="">
+                            <button class="btn btn-danger btn-sm" title="{% translate 'Zet dit character op de blacklist' %}">⛔ {% translate "Blacklist" %}</button>
+                        </form>
+                    {% endif %}
+                {% endif %}
             </div>
         </div>
     </div>
@@ -349,5 +360,17 @@
             </div>
         </div>
     </div>
+
+    {# Vraag om een reden bij het blacklisten #}
+    <script>
+        document.querySelectorAll('form.cs-bl-form').forEach(function (f) {
+            f.addEventListener('submit', function (e) {
+                var reason = window.prompt('Reden voor blacklisten (verplicht):', '');
+                if (!reason) { e.preventDefault(); return; }
+                var input = f.querySelector('input[name="comment"]');
+                if (input) { input.value = reason; }
+            });
+        });
+    </script>
     {% endwith %}
 {% endblock %}

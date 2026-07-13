@@ -170,11 +170,68 @@ def recruit_detail(request: WSGIRequest, pk: int) -> HttpResponse:
     enemy = enemy_set(recruiter_char)
     profile = full_profile(recruit.eve_character, enemy)
     vetting = assess(recruit.eve_character, enemy)
+
+    blacklist_available, already_blacklisted = False, False
+    try:
+        from blacklist.models import EveNote
+        blacklist_available = True
+        already_blacklisted = EveNote.objects.filter(
+            eve_id=recruit.eve_character.character_id, blacklisted=True
+        ).exists()
+    except Exception:  # noqa: BLE001 — blacklist-app niet geïnstalleerd
+        pass
+
     return render(
         request,
         "characterscan/detail.html",
-        {"recruit": recruit, "profile": profile, "vetting": vetting},
+        {
+            "recruit": recruit, "profile": profile, "vetting": vetting,
+            "blacklist_available": blacklist_available,
+            "already_blacklisted": already_blacklisted,
+        },
     )
+
+
+@login_required
+@permission_required("characterscan.recruiter")
+def blacklist_recruit(request: WSGIRequest, pk: int) -> HttpResponse:
+    """Zet een recruit-character op de allianceauth-blacklist (met reden)."""
+    if request.method != "POST":
+        return redirect("characterscan:recruit_detail", pk=pk)
+    recruit = get_object_or_404(Recruit.objects.select_related("eve_character"), pk=pk)
+    if not request.user.has_perm("blacklist.add_to_blacklist"):
+        messages.error(request, _("Je hebt geen recht om te blacklisten."))
+        return redirect("characterscan:recruit_detail", pk=pk)
+    try:
+        from blacklist.models import EveNote
+    except Exception:  # noqa: BLE001
+        messages.error(request, _("De Blacklist-app is niet geïnstalleerd."))
+        return redirect("characterscan:recruit_detail", pk=pk)
+
+    ec = recruit.eve_character
+    actor = getattr(request.user.profile, "main_character", None)
+    actor_name = actor.character_name if actor else request.user.username
+    reason = request.POST.get("comment", "").strip() or _("Toegevoegd via Character Scan")
+
+    note, created = EveNote.objects.get_or_create(
+        eve_id=ec.character_id, eve_catagory="character",
+        defaults={
+            "eve_name": ec.character_name, "added_by": actor_name, "reason": reason,
+            "corporation_id": ec.corporation_id, "corporation_name": ec.corporation_name,
+            "alliance_id": ec.alliance_id or None, "alliance_name": ec.alliance_name or None,
+        },
+    )
+    note.blacklisted = True
+    if not created and reason not in (note.reason or ""):
+        note.reason = f"{note.reason}\n{reason}" if note.reason else reason
+    note.save()
+
+    RecruitLogEntry.objects.create(
+        recruit=recruit, actor=request.user, action="alert",
+        comment=_("Op de blacklist gezet — %(r)s") % {"r": reason},
+    )
+    messages.success(request, _("%(n)s op de blacklist gezet.") % {"n": ec.character_name})
+    return redirect("characterscan:recruit_detail", pk=pk)
 
 
 @login_required

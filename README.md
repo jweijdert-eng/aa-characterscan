@@ -140,6 +140,22 @@ Voor de standings heeft een **director** bovendien `esi-corporations.read_contac
 `esi-alliances.read_contacts.v1` nodig. Zorg dat al deze scopes op je EVE-applicatie
 (developers.eveonline.com) staan.
 
+## Integraties
+
+### allianceauth-blacklist (optioneel)
+
+Is [allianceauth-blacklist](https://github.com/Solar-Helix-Independent-Transport/allianceauth-blacklist)
+geïnstalleerd, dan checkt de vetting elke recruit (character **+** corp **+** alliance) tegen de
+blacklist:
+
+- een blacklist-hit → rode vlag **"Op de blacklist"** (met de reden), gewicht 80 in de risico-score;
+- een gewone/restricted notitie → waarschuwing **"Blacklist-notitie"**;
+- schoon → **"Niet op de blacklist"**.
+
+Recruiters met het recht `blacklist.add_to_blacklist` kunnen een recruit ook **direct vanuit de
+detailpagina** op de blacklist zetten (knop met verplichte reden). Zonder de plugin wordt de check
+netjes overgeslagen (geen harde afhankelijkheid).
+
 ## Afhankelijkheden
 
 `allianceauth>=5`, `django-esi`, `django-eveuniverse`, `aa-charlink`.

@@ -32,6 +32,8 @@ ALLIANCE_CONTACTS_SCOPE = "esi-alliances.read_contacts.v1"
 # Risico-gewichten per vetting-signaal (punten). Optelling → score 0-100.
 # Overschrijfbaar via settings.CHARACTERSCAN_RISK_WEIGHTS ({label: punten}).
 RISK_WEIGHTS = {
+    "Op de blacklist": 80,
+    "Blacklist-notitie": 20,
     "Huidige corp/alliance": 60,
     "ISK met vijand": 45,
     "Mail met vijand": 45,
@@ -368,6 +370,27 @@ def enemy_set(recruiter_eve_character=None):
 
 
 # ── Analyse op het canonieke data-dict ───────────────────────────────────────
+def blacklist_hits(profile):
+    """Check character/corp/alliance tegen de allianceauth-blacklist (EveNote).
+    → dict {blacklisted: [...], notes: [...]} of None als de plugin ontbreekt."""
+    try:
+        from blacklist.models import EveNote
+    except Exception:  # noqa: BLE001 — plugin niet geïnstalleerd
+        return None
+    ids = [i for i in (profile.get("character_id"), profile.get("corp_id"),
+                       profile.get("alliance_id")) if i]
+    if not ids:
+        return {"blacklisted": [], "notes": []}
+    try:
+        rows = list(EveNote.objects.filter(eve_id__in=ids))
+    except Exception:  # noqa: BLE001
+        return None
+    return {
+        "blacklisted": [n for n in rows if n.blacklisted],
+        "notes": [n for n in rows if not n.blacklisted],
+    }
+
+
 def _location_enemy(loc, enemy, sov):
     """→ (is_vijand, reden) voor een clone-/asset-locatie (structure-eigenaar of sov)."""
     if not loc or not enemy:
@@ -511,6 +534,22 @@ def assess(eve_character, enemy, with_zkill=True):
 
     def flag(level, css, label, value):
         flags.append({"level": level, "css": css, "label": label, "value": value})
+
+    # Blacklist (allianceauth-blacklist, optioneel — sterk signaal)
+    bl = blacklist_hits(profile)
+    if bl is not None:
+        def _bl_item(n):
+            reason = (n.reason or "").strip()
+            return (f"{_icon(n.eve_id, (n.eve_catagory or '').lower())}<b>{n.eve_name}</b>"
+                    + (f" — {reason}" if reason else ""))
+        if bl["blacklisted"]:
+            bad += 1
+            flag("bad", "danger", "Op de blacklist", "; ".join(_bl_item(n) for n in bl["blacklisted"][:5]))
+        elif bl["notes"]:
+            warn += 1
+            flag("warn", "warning", "Blacklist-notitie", "; ".join(_bl_item(n) for n in bl["notes"][:5]))
+        else:
+            flag("ok", "success", "Blacklist", "Niet op de blacklist")
 
     # Risk-skills
     risk = profile.get("risk_skills", [])
