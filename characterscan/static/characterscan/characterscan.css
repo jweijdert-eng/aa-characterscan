@@ -183,6 +183,39 @@
 .cs-app .cs-tabs .nav-link:hover { color: var(--cs-blue); }
 .cs-app .cs-tabs .nav-link.active { background-color: var(--cs-blue); color: #021016; }
 
+/* Overzicht-kaart: gekleurde tegels + locatie/schip */
+.cs-app .cs-overview { display: grid; grid-template-columns: 1fr 1fr; gap: .55rem; }
+.cs-app .cs-ov-item {
+    display: flex;
+    flex-direction: column;
+    gap: .15rem;
+    padding: .55rem .7rem;
+    background: rgba(255, 255, 255, .03);
+    border: 1px solid var(--cs-border);
+    border-radius: 8px;
+}
+.cs-app .cs-ov-label { font-size: .6rem; text-transform: uppercase; letter-spacing: .06em; color: #79a6d2; font-weight: 600; }
+.cs-app .cs-ov-value { font-size: 1.15rem; font-weight: 700; color: var(--cs-text); line-height: 1.25; }
+.cs-app .cs-ov-value.cs-sp { color: var(--cs-blue); }
+.cs-app .cs-ov-unit { font-size: .72rem; font-weight: 600; color: var(--cs-dim); }
+.cs-app .cs-ov-sub { font-size: .8rem; font-weight: 500; color: var(--cs-dim); }
+
+.cs-app .cs-ov-wide {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    align-items: center;
+    gap: .65rem;
+    background: linear-gradient(120deg, rgba(0, 180, 216, .06), rgba(255, 255, 255, .02));
+}
+.cs-app .cs-ov-wide .cs-ov-body { min-width: 0; }
+.cs-app .cs-ov-wide .cs-ov-value { font-size: 1rem; overflow-wrap: anywhere; }
+.cs-app .cs-ov-icon { font-size: 1.5rem; line-height: 1; flex-shrink: 0; }
+.cs-app .cs-ov-ship {
+    width: 42px; height: 42px; border-radius: 7px; flex-shrink: 0;
+    border: 1px solid var(--cs-border); background: rgba(0, 0, 0, .3);
+}
+.cs-app .cs-ov-loc { color: var(--cs-green); }
+
 /* Looptijd-badge in de corp-historie (korte stints = rood) */
 .cs-app .cs-dur {
     flex-shrink: 0;

@@ -304,6 +304,10 @@ def _fetch_live(eve_character, token):
     for m in recent_mails:
         ids.add(m.get("from"))
         ids.update(r.get("recipient_id") for r in m.get("recipients", []))
+    if loc:
+        ids.update(filter(None, [loc.get("solar_system_id"), loc.get("station_id")]))
+    if ship:
+        ids.add(ship.get("ship_type_id"))
     ids.discard(None)
     name_map = _names(ids)
 
@@ -428,8 +432,13 @@ def _fetch_live(eve_character, token):
         "wallet_journal": journal,
         "mails": mails,
         "skill_injectors": skill_injectors,
-        "ship_name": name_map.get(ship.get("ship_type_id")) if ship else None,
+        "ship_type_id": ship.get("ship_type_id") if ship else None,
+        "ship_type_name": name_map.get(ship.get("ship_type_id")) if ship else None,
+        "ship_name": ship.get("ship_name") if ship else None,  # speler-gegeven naam
         "system_id": loc.get("solar_system_id") if loc else None,
+        "location_name": name_map.get(loc.get("solar_system_id")) if loc else None,
+        "station_name": name_map.get(loc.get("station_id")) if loc and loc.get("station_id") else None,
+        "docked": bool(loc.get("station_id") or loc.get("structure_id")) if loc else False,
     }
 
 
@@ -547,7 +556,8 @@ def _fetch_memberaudit(eve_character):
         "skill_groups": skill_groups, "risk_skills": risk_skills,
         "contacts": contacts, "contracts": contracts,
         "corp_history": corp_history, "wallet_journal": journal,
-        "ship_name": None, "system_id": None,
+        "ship_type_id": None, "ship_type_name": None, "ship_name": None,
+        "system_id": None, "location_name": None, "station_name": None, "docked": False,
     }
 
 
@@ -561,7 +571,9 @@ def _empty(eve_character):
         "owner_main": owner_main, "is_alt": is_alt,
         "sec": None, "age_years": None, "wallet": None, "total_sp": None, "unallocated_sp": None, "skill_count": None,
         "skill_groups": [], "risk_skills": [], "contacts": [], "contracts": [],
-        "corp_history": [], "wallet_journal": [], "ship_name": None, "system_id": None,
+        "corp_history": [], "wallet_journal": [],
+        "ship_type_id": None, "ship_type_name": None, "ship_name": None,
+        "system_id": None, "location_name": None, "station_name": None, "docked": False,
     }
 
 

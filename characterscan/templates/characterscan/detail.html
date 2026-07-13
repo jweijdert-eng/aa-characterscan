@@ -65,12 +65,44 @@
         <div class="col-md-6">
             <div class="card h-100">
                 <div class="card-header">📋 {% translate "Overzicht" %}</div>
-                <ul class="list-group list-group-flush">
-                    <li class="list-group-item d-flex justify-content-between"><span class="text-muted">{% translate "Sec status" %}</span><span>{{ s.sec|default_if_none:"?"|floatformat:2 }}</span></li>
-                    <li class="list-group-item d-flex justify-content-between"><span class="text-muted">{% translate "Leeftijd" %}</span><span>{% if s.age_years != None %}{{ s.age_years }} {% translate "jaar" %}{% else %}?{% endif %}</span></li>
-                    <li class="list-group-item d-flex justify-content-between"><span class="text-muted">{% translate "Wallet" %}</span><span>{% if s.wallet != None %}{{ s.wallet|intword }} ISK{% else %}🔒{% endif %}</span></li>
-                    <li class="list-group-item d-flex justify-content-between"><span class="text-muted">{% translate "Skillpoints" %}</span><span>{% if s.total_sp != None %}{{ s.total_sp|intword }} SP{% else %}?{% endif %}</span></li>
-                </ul>
+                <div class="card-body">
+                    <div class="cs-overview">
+                        <div class="cs-ov-item">
+                            <span class="cs-ov-label">🛡 {% translate "Sec status" %}</span>
+                            <span class="cs-ov-value {% if s.sec != None and s.sec >= 0.5 %}text-cs-green{% elif s.sec != None and s.sec > 0 %}text-cs-gold{% elif s.sec != None %}text-cs-red{% endif %}">{{ s.sec|default_if_none:"?"|floatformat:1 }}</span>
+                        </div>
+                        <div class="cs-ov-item">
+                            <span class="cs-ov-label">⏳ {% translate "Leeftijd" %}</span>
+                            <span class="cs-ov-value">{% if s.age_years != None %}{{ s.age_years }}<span class="cs-ov-unit"> {% translate "jaar" %}</span>{% else %}?{% endif %}</span>
+                        </div>
+                        <div class="cs-ov-item">
+                            <span class="cs-ov-label">💰 {% translate "Wallet" %}</span>
+                            <span class="cs-ov-value text-cs-gold">{% if s.wallet != None %}{{ s.wallet|intword }}{% else %}🔒{% endif %}</span>
+                        </div>
+                        <div class="cs-ov-item">
+                            <span class="cs-ov-label">◎ {% translate "Skillpoints" %}</span>
+                            <span class="cs-ov-value cs-sp">{% if s.total_sp != None %}{{ s.total_sp|intword }}{% else %}?{% endif %}</span>
+                        </div>
+                        <div class="cs-ov-item cs-ov-wide">
+                            <span class="cs-ov-icon">📍</span>
+                            <div class="cs-ov-body">
+                                <div class="cs-ov-label">{% translate "Locatie" %}</div>
+                                <div class="cs-ov-value cs-ov-loc">
+                                    {% if profile.location.system_name %}{{ profile.location.system_name }}{% if profile.location.station_name %} <span class="cs-ov-sub">· {{ profile.location.station_name }}</span>{% elif profile.location.docked %} <span class="cs-ov-sub">· {% translate "gedockt" %}</span>{% endif %}{% else %}<span class="text-muted">{% translate "onbekend" %}</span>{% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="cs-ov-item cs-ov-wide">
+                            {% if profile.ship.type_id %}<img src="https://images.evetech.net/types/{{ profile.ship.type_id }}/icon?size=64" alt="" class="cs-ov-ship">{% else %}<span class="cs-ov-icon">🚀</span>{% endif %}
+                            <div class="cs-ov-body">
+                                <div class="cs-ov-label">{% translate "Huidig schip" %}</div>
+                                <div class="cs-ov-value cs-ov-ship-name">
+                                    {% if profile.ship.type_name %}{{ profile.ship.type_name }}{% if profile.ship.name and profile.ship.name != profile.ship.type_name %} <span class="cs-ov-sub">"{{ profile.ship.name }}"</span>{% endif %}{% else %}<span class="text-muted">{% translate "onbekend" %}</span>{% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -181,6 +213,7 @@
                             </div>
                             <div class="small text-muted mt-1">
                                 {% translate "van" %} <span class="{% if m.is_enemy %}text-danger fw-bold{% else %}text-body{% endif %}">{{ m.from_name|default:"?" }}</span>
+                                {% if m.from_standing != None %}<span class="badge ms-1 {% if m.from_standing > 0 %}bg-success{% elif m.from_standing < 0 %}bg-danger{% else %}bg-secondary{% endif %}" title="{% translate 'eigen standing t.o.v. afzender' %}">{% translate "standing" %} {{ m.from_standing|floatformat:1 }}</span>{% endif %}
                                 {% if m.is_enemy %}<span class="badge bg-danger ms-1">{% translate "vijand" %}</span>{% endif %}
                                 {% for t in m.suspect %}<span class="badge bg-warning ms-1">{{ t }}</span>{% endfor %}
                             </div>

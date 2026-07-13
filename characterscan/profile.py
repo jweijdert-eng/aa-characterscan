@@ -41,12 +41,19 @@ def full_profile(eve_character, enemy=None):
         c["acceptor_enemy"] = c.get("acceptor_id") in enemy
         c["is_enemy"] = c["issuer_enemy"] or c["assignee_enemy"] or c["acceptor_enemy"]
 
+    standing_by_id = {c.get("id"): c.get("standing") for c in p.get("contacts", [])}
     mails = p.get("mails", [])
     for m in mails:
         m["suspect"] = sorted(_scan_text((m.get("subject") or "") + " " + (m.get("body") or "")))
         parties = [m.get("from_id")] + (m.get("recipient_ids") or [])
         m["is_enemy"] = any(pid in enemy for pid in parties if pid)
         m["date_parsed"] = _parse_date(m.get("date"))
+        # Eigen standing van de recruit t.o.v. de mail-correspondenten (afzender eerst)
+        standings = [standing_by_id.get(pid) for pid in parties if pid in standing_by_id]
+        m["from_standing"] = standing_by_id.get(m.get("from_id"))
+        m["standing"] = m["from_standing"] if m["from_standing"] is not None else (
+            standings[0] if standings else None
+        )
 
     return {
         "stats": basic_stats(eve_character),
@@ -57,4 +64,15 @@ def full_profile(eve_character, enemy=None):
         "contacts": p.get("contacts", []),
         "contracts": p.get("contracts", []),
         "mails": mails,
+        "ship": {
+            "type_id": p.get("ship_type_id"),
+            "type_name": p.get("ship_type_name"),
+            "name": p.get("ship_name"),
+        },
+        "location": {
+            "system_id": p.get("system_id"),
+            "system_name": p.get("location_name"),
+            "station_name": p.get("station_name"),
+            "docked": p.get("docked", False),
+        },
     }
