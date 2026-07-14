@@ -10,7 +10,10 @@ Character Scan haalt z'n data **zelf op via ESI** en is **niet afhankelijk van M
 
 - **Aanmelden** — een recruit koppelt z'n hele account (main + alts) via CharLink.
 - **Recruiter-lijst** — kaarten met portret, corp/alliance-logo's, sec/leeftijd/wallet/SP,
-  statusfilters en een gekleurde verdict-stip; snelacties met notitie.
+  een gekleurde verdict-stip en snelacties met notitie. Filters **Nieuw / Afgerond / Totaal**
+  (aangenomen + afgewezen komen samen onder *Afgerond*). Nieuwe recruits worden **parallel**
+  en lichtgewicht gescand (snel); afgeronde recruits tonen hun **opgeslagen** resultaat en
+  worden alleen op verzoek (🔄-knop) opnieuw live gescand.
 - **Detailprofiel** — gekleurd overzicht (locatie + huidig schip), skills per groep,
   corp-historie (met looptijd per corp), contacts, contracts, clones en assets.
 - **Vetting** met verdict (VEILIG / CONTROLEER / VERDACHT) + **risico-score 0–100**:
@@ -34,7 +37,7 @@ Character Scan haalt z'n data **zelf op via ESI** en is **niet afhankelijk van M
 1. Installeer het pakket in je Alliance Auth virtualenv:
 
    ```bash
-   pip install git+https://github.com/jweijdert-eng/aa-characterscan.git@v1.7.0
+   pip install git+https://github.com/jweijdert-eng/aa-characterscan.git@v1.11.4
    ```
 
 2. Voeg toe aan `myauth/settings/local.py`:
@@ -70,7 +73,7 @@ Character Scan haalt z'n data **zelf op via ESI** en is **niet afhankelijk van M
 Bij een upgrade waar nieuwe scopes/taken bij komen:
 
 1. `pip install --upgrade git+https://github.com/jweijdert-eng/aa-characterscan.git@vX.Y.Z`
-2. `python manage.py migrate` (v1.7.0 voegt migraties 0005 + 0006 toe)
+2. `python manage.py migrate` (migraties lopen t/m 0010 — o.a. `recruit_last_stats` in v1.11.0)
 3. `python manage.py collectstatic --noinput`
 4. **ESI-app bijwerken** met eventuele nieuwe scopes (zie onder).
 5. **Beat-taken** aanwezig? `characterscan_refresh_enemy_standings` én
