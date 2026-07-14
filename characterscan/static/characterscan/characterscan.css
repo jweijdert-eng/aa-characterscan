@@ -161,6 +161,9 @@
 .cs-app .btn-outline-success:hover, .cs-app .btn-success { background: rgba(62, 207, 110, .15); border-color: var(--cs-green); color: #b9f2d0; }
 .cs-app .btn-outline-danger { color: var(--cs-red); border-color: rgba(224, 85, 85, .5); }
 .cs-app .btn-outline-danger:hover { background: rgba(224, 85, 85, .12); border-color: var(--cs-red); color: #ffb4b4; }
+/* Scan-knop (afgeronde recruits opnieuw scannen) — warme amber-oranje, thema-stijl */
+.cs-app .cs-scan { color: #f0932b; border-color: rgba(240, 147, 43, .55); background: rgba(240, 147, 43, .13); }
+.cs-app .cs-scan:hover { background: rgba(240, 147, 43, .24); border-color: #f0932b; color: #ffc078; }
 .cs-app .btn-primary {
     background: linear-gradient(135deg, rgba(0, 180, 216, .9), rgba(0, 140, 180, .95));
     border: 1px solid rgba(0, 180, 216, .6); color: #021016; font-weight: 700;
