@@ -1,0 +1,66 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<div id="content-main">
+    <p><a href="../">&larr; {% translate "Terug naar Eve notes" %}</a></p>
+
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <fieldset class="module aligned">
+            <h2>{% translate "Blacklist importeren (CSV/TSV)" %}</h2>
+            <div class="form-row">
+                <label for="id_file">{% translate "Bestand" %}:</label>
+                <input type="file" name="file" id="id_file" accept=".csv,.tsv" required>
+                <p class="help">{% translate "Exporteer de Google-sheet als CSV (Bestand → Downloaden → Kommagescheiden .csv). Gebruik CSV, niet TSV — TSV kan meerregelige cellen (alts) verkeerd splitsen." %}</p>
+            </div>
+            <div class="form-row">
+                <label for="id_skip">{% translate "Kop-regels overslaan" %}:</label>
+                <input type="number" name="skip" id="id_skip" value="{{ skip|default:3 }}" style="width:5em">
+                <span class="help">{% translate "Google-sheet: 3 (instructie + kolomkoppen)." %}</span>
+            </div>
+            <div class="form-row">
+                <label>{% translate "Type" %}:</label>
+                <label style="display:inline;font-weight:normal"><input type="radio" name="type" value="restricted" {% if restricted != False %}checked{% endif %}> Restricted</label>
+                &nbsp;&nbsp;
+                <label style="display:inline;font-weight:normal"><input type="radio" name="type" value="blacklisted" {% if restricted == False %}checked{% endif %}> Blacklisted</label>
+            </div>
+            <div class="submit-row">
+                <button type="submit" name="do" value="dry">{% translate "Dry-run (preview)" %}</button>
+                <button type="submit" name="do" value="import" class="default"
+                        onclick="return confirm('Weet je zeker dat je nu importeert?')">{% translate "Importeren" %}</button>
+            </div>
+            <p class="help">{% translate "Dry-run schrijft niets — alleen een voorbeeld. Bestaande entries worden overgeslagen." %}</p>
+        </fieldset>
+    </form>
+
+    {% if result %}
+        <h2>{% if committed %}{% translate "Geïmporteerd" %}{% else %}{% translate "Dry-run" %}{% endif %} — {{ filename }}</h2>
+        <ul class="messagelist"><li{% if committed %} class="success"{% endif %}>
+            {% translate "Regels ingelezen" %}: <b>{{ result.total }}</b> ·
+            {% if committed %}{% translate "aangemaakt" %}: <b>{{ result.created }}</b>{% else %}{% translate "nieuw (zou aangemaakt worden)" %}: <b>{{ result.new_count }}</b>{% endif %} ·
+            {% translate "niet gevonden" %}: {{ result.skipped_nf }} ·
+            {% translate "al aanwezig" %}: {{ result.skipped_exist }}
+        </li></ul>
+
+        <table id="result_list">
+            <thead><tr>
+                <th>{% translate "Character" %}</th><th>{% translate "Status" %}</th>
+                <th>ID</th><th>{% translate "Alts" %}</th><th>{% translate "Reden" %}</th>
+            </tr></thead>
+            <tbody>
+            {% for p in result.preview %}
+                <tr class="{% cycle 'row1' 'row2' %}">
+                    <td>{{ p.main }}</td>
+                    <td>{% if p.status == "nieuw" %}<b style="color:#3ecf6e">nieuw</b>{% elif p.status == "bestaat al" %}<span style="color:#8a90b0">bestaat al</span>{% else %}<span style="color:#e05555">niet gevonden</span>{% endif %}</td>
+                    <td>{{ p.eid|default:"—" }}</td>
+                    <td>{{ p.alts }}</td>
+                    <td>{{ p.reason }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% if result.preview_truncated %}<p class="help">{% translate "(voorbeeld beperkt tot 150 regels; de import verwerkt alles)" %}</p>{% endif %}
+    {% endif %}
+</div>
+{% endblock %}

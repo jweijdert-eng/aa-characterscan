@@ -82,3 +82,53 @@ class RecruitAdmin(admin.ModelAdmin):
     @admin.display(description="Corp")
     def corporation(self, obj):
         return obj.eve_character.corporation_name
+
+
+# ── Import-knop op de Blacklist "Eve notes"-pagina ───────────────────────────
+# Breidt de bestaande EveNote-admin (allianceauth-blacklist) uit met CSV/TSV-import.
+try:
+    from django.shortcuts import render
+    from django.urls import path
+    from blacklist.models import EveNote as _EveNote
+    from blacklist.admin import EveNoteAdmin as _EveNoteAdmin
+
+    class EveNoteImportAdmin(_EveNoteAdmin):
+        change_list_template = "characterscan/blacklist_evenote_changelist.html"
+
+        def get_urls(self):
+            return [
+                path("import-csv/", self.admin_site.admin_view(self.import_csv_view),
+                     name="blacklist_evenote_import"),
+            ] + super().get_urls()
+
+        def import_csv_view(self, request):
+            from . import bl_import
+            ctx = dict(self.admin_site.each_context(request), title="Blacklist importeren (CSV/TSV)")
+            f = request.FILES.get("file")
+            if request.method == "POST" and f:
+                try:
+                    text = f.read().decode("utf-8-sig")
+                except Exception:  # noqa: BLE001
+                    text = f.read().decode("latin-1", "replace")
+                try:
+                    skip = int(request.POST.get("skip") or 3)
+                except ValueError:
+                    skip = 3
+                restricted = request.POST.get("type", "restricted") == "restricted"
+                commit = request.POST.get("do") == "import"
+                entries = bl_import.parse_text(text, skip=skip)  # sep auto (CSV/TSV)
+                resolved = bl_import.resolve_names(bl_import.all_lookup_names(entries))
+                result = bl_import.run_import(entries, resolved, commit=commit, restricted=restricted)
+                ctx.update({"result": result, "committed": commit, "restricted": restricted,
+                            "skip": skip, "filename": f.name})
+                if commit:
+                    messages.success(request,
+                                     f"{result['created']} entries geimporteerd "
+                                     f"({result['skipped_nf']} niet gevonden, "
+                                     f"{result['skipped_exist']} al aanwezig).")
+            return render(request, "characterscan/blacklist_import.html", ctx)
+
+    admin.site.unregister(_EveNote)
+    admin.site.register(_EveNote, EveNoteImportAdmin)
+except Exception:  # noqa: BLE001 — blacklist niet geinstalleerd of admin anders
+    pass
