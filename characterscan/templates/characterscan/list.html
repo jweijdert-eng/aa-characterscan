@@ -32,6 +32,7 @@
         <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-3">
             {% for item in recruits %}
                 {% with r=item.recruit s=item.stats v=item.verdict %}
+                    {% comment %}s = live stats óf opgeslagen snapshot (afgeronde recruits){% endcomment %}
                     <div class="col">
                         <div class="card h-100 border-{{ v.css }}">
                             <div class="card-body d-flex gap-3">
@@ -86,18 +87,31 @@
                                     {% if not s.registered %}
                                         <div class="small text-warning mt-1">{% translate "niet in Member Audit" %}</div>
                                     {% endif %}
+                                    {% if not item.fresh and r.last_scanned_at %}
+                                        <div class="small text-muted mt-1" title="{% translate 'Opgeslagen resultaat — niet live gescand' %}">
+                                            🕓 {% translate "gescand" %} {{ r.last_scanned_at|naturaltime }}
+                                        </div>
+                                    {% endif %}
+                                    {% url 'characterscan:recruiter_list' as list_url %}
                                     <div class="d-flex gap-1 mt-2">
                                         <form method="post" action="{% url 'characterscan:recruit_action' r.pk %}" class="cs-decide">
                                             {% csrf_token %}
                                             <input type="hidden" name="action" value="accepted">
                                             <input type="hidden" name="comment" value="">
+                                            <input type="hidden" name="next" value="{{ list_url }}?status={{ status }}">
                                             <button class="btn btn-outline-success btn-sm">✓</button>
                                         </form>
                                         <form method="post" action="{% url 'characterscan:recruit_action' r.pk %}" class="cs-decide">
                                             {% csrf_token %}
                                             <input type="hidden" name="action" value="rejected">
                                             <input type="hidden" name="comment" value="">
+                                            <input type="hidden" name="next" value="{{ list_url }}?status={{ status }}">
                                             <button class="btn btn-outline-danger btn-sm">✕</button>
+                                        </form>
+                                        <form method="post" action="{% url 'characterscan:recruit_rescan' r.pk %}" class="ms-auto">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="next" value="{{ list_url }}?status={{ status }}">
+                                            <button class="btn btn-outline-info btn-sm" title="{% translate 'Nu opnieuw scannen (verse ESI-data)' %}">🔄</button>
                                         </form>
                                     </div>
                                 </div>

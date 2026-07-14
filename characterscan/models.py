@@ -121,6 +121,9 @@ class Recruit(models.Model):
     last_verdict = models.CharField(max_length=10, blank=True, default="")
     last_scanned_at = models.DateTimeField(null=True, blank=True)
     known_bad_flags = models.JSONField(default=list, blank=True)
+    # Snapshot van de compacte lijst-stats, zodat afgeronde recruits niet live
+    # gescand hoeven te worden om de kaart te tonen (zie recruiter_list).
+    last_stats = models.JSONField(default=dict, blank=True)
 
     class Meta:
         ordering = ["-updated_at"]

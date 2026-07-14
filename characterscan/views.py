@@ -16,15 +16,33 @@ from django.utils.translation import gettext_lazy as _
 from allianceauth.eveonline.models import EveCharacter
 from esi.decorators import token_required
 
+from django.utils import timezone
+
 from .models import Recruit, RecruitLogEntry
 from .profile import basic_stats, full_profile
 from .vetting import (
     ALLIANCE_CONTACTS_SCOPE,
     CORP_CONTACTS_SCOPE,
+    VERDICTS,
     assess,
     enemy_set,
     quick_verdict,
 )
+
+# Verdict-weergave voor een opgeslagen niveau (of onbekend/nog niet gescand).
+_UNKNOWN_VERDICT = {"level": "", "label": "?", "css": "secondary", "icon": "·"}
+
+
+def _verdict_from_level(level):
+    return VERDICTS.get(level, _UNKNOWN_VERDICT)
+
+
+def _persist_snapshot(recruit, stats, verdict):
+    """Bewaar de compacte lijst-stats + verdict op de recruit (voor snelle weergave)."""
+    recruit.last_stats = stats or {}
+    recruit.last_verdict = (verdict or {}).get("level", "")
+    recruit.last_scanned_at = timezone.now()
+    recruit.save(update_fields=["last_stats", "last_verdict", "last_scanned_at"])
 
 
 @login_required
@@ -107,25 +125,36 @@ def recruiter_list(request: WSGIRequest) -> HttpResponse:
     recruiter_char = getattr(request.user.profile, "main_character", None)
     enemy = enemy_set(recruiter_char)
 
-    # Elke recruit doet een (lichte) ESI-scan; die parallel uitvoeren scheelt veel
-    # laadtijd t.o.v. recruit-na-recruit serieel afwerken.
-    def _row(r):
+    # Alleen NIEUWE recruits (en afgeronde die nog nooit gescand zijn) worden live
+    # gescand. Afgeronde recruits tonen hun opgeslagen snapshot — geen ESI-calls.
+    recruit_list = list(qs)
+    need_scan = [r for r in recruit_list if r.status == "new" or not r.last_stats]
+
+    def _scan(r):
         from django.db import connections
         try:
-            return {
-                "recruit": r,
-                "stats": basic_stats(r.eve_character, lite=True),
-                "verdict": quick_verdict(r.eve_character, enemy, lite=True),
-            }
+            return (basic_stats(r.eve_character, lite=True),
+                    quick_verdict(r.eve_character, enemy, lite=True))
         finally:
             connections.close_all()  # thread-eigen DB-connectie netjes sluiten
 
-    recruit_list = list(qs)
-    if recruit_list:
-        with ThreadPoolExecutor(max_workers=min(6, len(recruit_list))) as ex:
-            recruits = list(ex.map(_row, recruit_list))
-    else:
-        recruits = []
+    live = {}
+    if need_scan:
+        with ThreadPoolExecutor(max_workers=min(6, len(need_scan))) as ex:
+            for r, res in zip(need_scan, ex.map(_scan, need_scan)):
+                live[r.pk] = res
+        for r in need_scan:  # snapshot opslaan (in de hoofd-thread)
+            _persist_snapshot(r, *live[r.pk])
+
+    recruits = []
+    for r in recruit_list:
+        if r.pk in live:
+            stats, verdict = live[r.pk]
+            fresh = True
+        else:
+            stats, verdict = r.last_stats, _verdict_from_level(r.last_verdict)
+            fresh = False
+        recruits.append({"recruit": r, "stats": stats, "verdict": verdict, "fresh": fresh})
     from .vetting import standings_token_exists
 
     return render(
@@ -209,6 +238,33 @@ def recruit_detail(request: WSGIRequest, pk: int) -> HttpResponse:
             "already_blacklisted": already_blacklisted,
         },
     )
+
+
+@login_required
+@permission_required("characterscan.recruiter")
+def recruit_rescan(request: WSGIRequest, pk: int) -> HttpResponse:
+    """Scan één recruit nu opnieuw (verse volledige ESI-scan) en werk de snapshot bij."""
+    if request.method != "POST":
+        return redirect("characterscan:recruiter_list")
+    recruit = get_object_or_404(Recruit.objects.select_related("eve_character"), pk=pk)
+    recruiter_char = getattr(request.user.profile, "main_character", None)
+    enemy = enemy_set(recruiter_char)
+    ec = recruit.eve_character
+
+    from .esi_fetch import get_profile
+    get_profile(ec, force=True)  # verse volledige scan (cache verversen)
+    stats = basic_stats(ec)
+    result = assess(ec, enemy)
+
+    recruit.last_stats = stats
+    recruit.last_verdict = result["verdict"].get("level", "")
+    recruit.last_score = result.get("score")
+    recruit.last_scanned_at = timezone.now()
+    recruit.known_bad_flags = [f["label"] for f in result.get("flags", []) if f.get("level") == "bad"]
+    recruit.save(update_fields=["last_stats", "last_verdict", "last_score",
+                                "last_scanned_at", "known_bad_flags"])
+    messages.success(request, _("%(n)s opnieuw gescand.") % {"n": ec.character_name})
+    return redirect(request.POST.get("next") or "characterscan:recruiter_list")
 
 
 @login_required

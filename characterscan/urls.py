@@ -16,5 +16,6 @@ urlpatterns = [
     path("grant-standings/", views.grant_standings, name="grant_standings"),
     path("recruits/<int:pk>/", views.recruit_detail, name="recruit_detail"),
     path("recruits/<int:pk>/action/", views.recruit_action, name="recruit_action"),
+    path("recruits/<int:pk>/rescan/", views.recruit_rescan, name="recruit_rescan"),
     path("recruits/<int:pk>/blacklist/", views.blacklist_recruit, name="blacklist_recruit"),
 ]

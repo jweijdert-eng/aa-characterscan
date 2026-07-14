@@ -36,6 +36,7 @@ def rescan_members():
     from .discord import notify_flags
     from .esi_fetch import get_profile
     from .models import Recruit, RecruitLogEntry
+    from .profile import basic_stats
     from .vetting import assess, enemy_set
 
     enemy = enemy_set()
@@ -64,7 +65,9 @@ def rescan_members():
         recruit.last_verdict = result["verdict"]["level"]
         recruit.last_scanned_at = timezone.now()
         recruit.known_bad_flags = bad_now
-        recruit.save(update_fields=["last_score", "last_verdict", "last_scanned_at", "known_bad_flags"])
+        recruit.last_stats = basic_stats(recruit.eve_character)  # snapshot voor de lijst
+        recruit.save(update_fields=["last_score", "last_verdict", "last_scanned_at",
+                                    "known_bad_flags", "last_stats"])
 
     logger.info("Character Scan: leden herscand, %d nieuwe waarschuwing(en).", alerts)
     return alerts
