@@ -105,19 +105,20 @@ def apply(request: WSGIRequest) -> HttpResponse:
 def recruiter_list(request: WSGIRequest) -> HttpResponse:
     """Overzicht van alle aanmeldingen voor recruiters."""
     status = request.GET.get("status", "new")
-    base = Recruit.objects.select_related("eve_character")
+    base = Recruit.objects.select_related("eve_character", "handled_by__profile__main_character")
     counts = {row["status"]: row["n"] for row in base.values("status").annotate(n=Count("id"))}
     # Afgerond = verwerkt (aangenomen óf afgewezen); zo blijft "Nieuw" schoon.
     counts["afgerond"] = counts.get("accepted", 0) + counts.get("rejected", 0)
-    counts["all"] = counts.get("new", 0) + counts["afgerond"]
+    counts["all"] = counts.get("new", 0) + counts.get("in_progress", 0) + counts["afgerond"]
     filters = [
         {"key": "new", "label": _("Nieuw"), "count": counts.get("new", 0), "color": "warning"},
+        {"key": "in_progress", "label": _("In behandeling"), "count": counts.get("in_progress", 0), "color": "info"},
         {"key": "afgerond", "label": _("Afgerond"), "count": counts.get("afgerond", 0), "color": "success"},
-        {"key": "all", "label": _("Totaal"), "count": counts.get("all", 0), "color": "info"},
+        {"key": "all", "label": _("Totaal"), "count": counts.get("all", 0), "color": "danger"},
     ]
     if status == "afgerond":
         qs = base.filter(status__in=("accepted", "rejected"))
-    elif status in ("new", "accepted", "rejected"):
+    elif status in ("new", "in_progress", "accepted", "rejected"):
         qs = base.filter(status=status)  # directe deep-links blijven werken
     else:
         qs = base
@@ -128,7 +129,7 @@ def recruiter_list(request: WSGIRequest) -> HttpResponse:
     # Alleen NIEUWE recruits (en afgeronde die nog nooit gescand zijn) worden live
     # gescand. Afgeronde recruits tonen hun opgeslagen snapshot — geen ESI-calls.
     recruit_list = list(qs)
-    need_scan = [r for r in recruit_list if r.status == "new" or not r.last_stats]
+    need_scan = [r for r in recruit_list if r.status in ("new", "in_progress") or not r.last_stats]
 
     def _scan(r):
         from django.db import connections
@@ -157,6 +158,7 @@ def recruiter_list(request: WSGIRequest) -> HttpResponse:
         recruits.append({"recruit": r, "stats": stats, "verdict": verdict, "fresh": fresh})
     from .vetting import standings_token_exists
 
+    from .models import Settings
     return render(
         request,
         "characterscan/list.html",
@@ -165,6 +167,7 @@ def recruiter_list(request: WSGIRequest) -> HttpResponse:
             "filters": filters,
             "status": status,
             "needs_standings_grant": not standings_token_exists(),
+            "show_actions_on_done": Settings.load().show_actions_on_done,
             "active_tab": "list",
         },
     )
@@ -333,9 +336,11 @@ def recruit_action(request: WSGIRequest, pk: int) -> HttpResponse:
             messages.success(request, _("Notitie toegevoegd."))
         else:
             messages.info(request, _("Lege notitie — niets opgeslagen."))
-    elif action in ("accepted", "rejected", "new"):
+    elif action in ("accepted", "rejected", "new", "in_progress"):
         recruit.status = action
-        recruit.save(update_fields=["status", "updated_at"])
+        # Wie pakt/verwerkt de aanmelding? Bij heropenen ('new') wissen we het.
+        recruit.handled_by = None if action == "new" else request.user
+        recruit.save(update_fields=["status", "handled_by", "updated_at"])
         RecruitLogEntry.objects.create(
             recruit=recruit, actor=request.user, action=action, comment=comment
         )

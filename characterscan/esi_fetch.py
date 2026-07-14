@@ -362,13 +362,68 @@ def _process_clones(clones_raw, access):
         return {"location_id": lid, "name": r.get("name"), "system_id": r.get("system_id"),
                 "owner_corp_id": r.get("owner_corp_id"), "kind": r.get("kind")}
 
-    return {
+    result = {
         "jump_count": len(jcs),
         "home": ({**loc(home["location_id"]), "type": home.get("location_type")}
                  if home.get("location_id") else None),
         "locations": [{**loc(j.get("location_id")), "type": j.get("location_type"),
                        "implants": len(j.get("implants", []))} for j in jcs],
     }
+    marks = list(result["locations"])
+    if result["home"]:
+        marks.append(result["home"])
+    _mark_security(marks)  # sec-kleur per locatie (EVE-security van het systeem)
+    return result
+
+
+# EVE-security-kleuren (zoals in de client): per 0,1-stap; negatief → nullsec-rood.
+SEC_COLORS = {
+    1.0: "#2FEFEF", 0.9: "#48F0C0", 0.8: "#00EF47", 0.7: "#00F000", 0.6: "#8FEF2F",
+    0.5: "#EFEF00", 0.4: "#D77700", 0.3: "#F06000", 0.2: "#F04800", 0.1: "#D73000", 0.0: "#F00000",
+}
+
+
+def _sec_color(sec):
+    """Security-status → EVE-kleur (hex), of None."""
+    if sec is None:
+        return None
+    step = round(min(max(sec, 0.0), 1.0), 1)  # negatief telt als 0.0 (rood)
+    return SEC_COLORS.get(step, "#F00000")
+
+
+def system_security(system_id):
+    """Security-status van een solar system (ESI, sterk gecached). None = onbekend."""
+    if not system_id:
+        return None
+    key = f"cs_sysec_{system_id}"
+    cached = cache.get(key)
+    if cached is not None:
+        return None if cached == "none" else cached
+    sec = None
+    try:
+        r = requests.get(f"{ESI}/universe/systems/{system_id}/?datasource=tranquility",
+                         headers=UA, timeout=8)
+        if r.ok:
+            sec = r.json().get("security_status")
+    except Exception:  # noqa: BLE001
+        pass
+    cache.set(key, "none" if sec is None else sec, 7 * 86400)
+    return sec
+
+
+def _mark_security(locations):
+    """Voeg sec + sec_color (EVE-kleur) toe aan een lijst locatie-dicts."""
+    sys_ids = {lc.get("system_id") for lc in locations if lc.get("system_id")}
+    secs = _parallel({sid: (lambda s=sid: system_security(s)) for sid in sys_ids},
+                     max_workers=8) if sys_ids else {}
+    for lc in locations:
+        sec = secs.get(lc.get("system_id"))
+        lc["sec"] = round(sec, 1) if sec is not None else None
+        lc["sec_color"] = _sec_color(sec)
+        # Naam splitsen: deel vóór de eerste ' - ' (systeem) krijgt de sec-kleur, rest grijs.
+        head, sep, tail = (lc.get("name") or "").partition(" - ")
+        lc["name_head"] = head
+        lc["name_tail"] = (sep + tail) if sep else ""
 
 
 def _process_assets(assets_raw, access):
@@ -390,6 +445,7 @@ def _process_assets(assets_raw, access):
         r = resolved.get(lid) or {}
         locations.append({"location_id": lid, "name": r.get("name"), "system_id": r.get("system_id"),
                           "owner_corp_id": r.get("owner_corp_id"), "kind": r.get("kind"), "item_count": n})
+    _mark_security(locations)  # sec-kleur per locatie
     return {"count": len(assets_raw), "location_count": len(counts), "locations": locations}
 
 

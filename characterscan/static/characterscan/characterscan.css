@@ -315,3 +315,11 @@
     background: var(--cs-surface); border-color: var(--cs-blue); color: var(--cs-text);
     box-shadow: 0 0 0 .2rem rgba(0, 180, 216, .15);
 }
+
+/* Security-status als strak pilletje vóór een locatienaam (assets/clones) */
+.cs-app .cs-secpill {
+    display: inline-block; min-width: 2.7em; text-align: center;
+    padding: 1px .4em; margin-right: .45em; border-radius: 4px;
+    font-weight: 700; font-size: .72rem; letter-spacing: .02em; vertical-align: middle;
+    background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .09);
+}

@@ -20,6 +20,12 @@
                     {% endif %}
                     {{ c.corporation_name }}{% if c.alliance_name %} · {{ c.alliance_name }}{% endif %}
                 </div>
+                <div class="mt-2 d-flex gap-2 flex-wrap">
+                    <a href="https://evewho.com/character/{{ c.character_id }}" target="_blank" rel="noopener"
+                       class="btn btn-outline-info btn-sm">🔎 {% translate "EVE Who" %} ↗</a>
+                    <a href="https://zkillboard.com/character/{{ c.character_id }}/" target="_blank" rel="noopener"
+                       class="btn btn-outline-secondary btn-sm">☠ zKillboard ↗</a>
+                </div>
             </div>
             <div class="d-flex gap-2">
                 <form method="post" action="{% url 'characterscan:recruit_action' recruit.pk %}">
@@ -239,7 +245,7 @@
                     {% if profile.clones.home %}
                         <li class="list-group-item {% if profile.clones.home.is_enemy %}list-group-item-danger{% endif %}">
                             <div class="d-flex justify-content-between align-items-center gap-2">
-                                <span class="{% if profile.clones.home.is_enemy %}text-danger fw-bold{% endif %}">{% if profile.clones.home.is_enemy %}⚠ {% endif %}🏠 {{ profile.clones.home.name|default:"?" }}</span>
+                                <span {% if profile.clones.home.is_enemy %}class="text-danger fw-bold"{% elif profile.clones.home.sec_color %}style="color:{{ profile.clones.home.sec_color }}"{% endif %}>{% if profile.clones.home.sec != None and not profile.clones.home.is_enemy %}<span class="cs-secpill" style="color:{{ profile.clones.home.sec_color }}">{{ profile.clones.home.sec|floatformat:1 }}</span>{% endif %}{% if profile.clones.home.is_enemy %}⚠ 🏠 {{ profile.clones.home.name|default:"?" }}{% else %}🏠 {{ profile.clones.home.name_head|default:"?" }}<span class="text-muted">{{ profile.clones.home.name_tail }}</span>{% endif %}</span>
                                 <span class="badge bg-info">{% translate "home" %}</span>
                             </div>
                             <div class="small text-muted">{{ profile.clones.home.system_name|default:"" }}{% if profile.clones.home.owner_name %} · {{ profile.clones.home.owner_name }}{% endif %}{% if profile.clones.home.enemy_reason %} · <span class="text-danger">{{ profile.clones.home.enemy_reason }}</span>{% endif %}</div>
@@ -248,7 +254,7 @@
                     {% for c in profile.clones.grouped %}
                         <li class="list-group-item {% if c.is_enemy %}list-group-item-danger{% endif %}">
                             <div class="d-flex justify-content-between align-items-center gap-2">
-                                <span class="{% if c.is_enemy %}text-danger fw-bold{% endif %}">{% if c.is_enemy %}⚠ {% endif %}{{ c.name|default:"?" }}</span>
+                                <span {% if c.is_enemy %}class="text-danger fw-bold"{% elif c.sec_color %}style="color:{{ c.sec_color }}"{% endif %}>{% if c.sec != None and not c.is_enemy %}<span class="cs-secpill" style="color:{{ c.sec_color }}">{{ c.sec|floatformat:1 }}</span>{% endif %}{% if c.is_enemy %}⚠ {{ c.name|default:"?" }}{% else %}{{ c.name_head|default:"?" }}<span class="text-muted">{{ c.name_tail }}</span>{% endif %}</span>
                                 <span class="text-muted small text-nowrap">{% if c.count > 1 %}{{ c.count }}× · {% endif %}{{ c.max_implants }} impl</span>
                             </div>
                             <div class="small text-muted">{{ c.system_name|default:"" }}{% if c.owner_name %} · {{ c.owner_name }}{% endif %}{% if c.enemy_reason %} · <span class="text-danger">{{ c.enemy_reason }}</span>{% endif %}</div>
@@ -269,7 +275,7 @@
                     {% for a in profile.assets.locations %}
                         <li class="list-group-item {% if a.is_enemy %}list-group-item-danger{% endif %}">
                             <div class="d-flex justify-content-between align-items-center gap-2">
-                                <span class="{% if a.is_enemy %}text-danger fw-bold{% endif %}">{% if a.is_enemy %}⚠ {% endif %}{{ a.name|default:a.location_id }}</span>
+                                <span {% if a.is_enemy %}class="text-danger fw-bold"{% elif a.sec_color %}style="color:{{ a.sec_color }}"{% endif %}>{% if a.sec != None and not a.is_enemy %}<span class="cs-secpill" style="color:{{ a.sec_color }}">{{ a.sec|floatformat:1 }}</span>{% endif %}{% if a.is_enemy %}⚠ {{ a.name|default:a.location_id }}{% else %}{{ a.name_head|default:a.location_id }}<span class="text-muted">{{ a.name_tail }}</span>{% endif %}</span>
                                 <span class="text-muted small text-nowrap">{{ a.item_count }} items</span>
                             </div>
                             {% if a.owner_name or a.enemy_reason %}<div class="small text-muted">{{ a.owner_name|default:"" }}{% if a.enemy_reason %} · <span class="text-danger">{{ a.enemy_reason }}</span>{% endif %}</div>{% endif %}
@@ -334,11 +340,19 @@
                 </div>
                 <ul class="list-group list-group-flush" style="max-height:460px;overflow:auto">
                     {% for m in profile.mails %}
-                        <li class="list-group-item {% if m.is_enemy %}list-group-item-danger{% endif %}">
+                        <li class="list-group-item cs-mail-item {% if m.is_enemy %}list-group-item-danger{% endif %}">
                             <div class="d-flex justify-content-between align-items-start gap-2">
                                 <span class="fw-semibold {% if m.is_enemy %}text-danger{% endif %}">{% if m.is_enemy or m.suspect %}⚠ {% else %}<span class="text-cs-green">✓</span> {% endif %}{{ m.subject|default:"(geen onderwerp)" }}</span>
-                                <span class="text-muted small text-nowrap">{{ m.date_parsed|date:"d M Y H:i" }}</span>
+                                <span class="text-muted small text-nowrap">
+                                    <button type="button" class="btn btn-link btn-sm p-0 me-2 cs-tr-btn" style="text-decoration:none;font-size:1rem;line-height:1"
+                                            title="{% translate 'Vertaal onderwerp + inhoud (auto → NL)' %}">🌐</button>
+                                    {{ m.date_parsed|date:"d M Y H:i" }}
+                                </span>
                             </div>
+                            <span class="cs-tr-src d-none">{{ m.subject }}
+
+{{ m.body }}</span>
+                            <div class="cs-tr-out small mt-1" style="display:none"></div>
                             <div class="small text-muted mt-1">
                                 {% translate "van" %} <span class="{% if m.is_enemy %}text-danger fw-bold{% else %}text-body{% endif %}">{{ m.from_name|default:"?" }}</span>
                                 {% if m.from_standing != None %}<span class="badge ms-1 {% if m.from_standing > 0 %}bg-success{% elif m.from_standing < 0 %}bg-danger{% else %}bg-secondary{% endif %}" title="{% translate 'eigen standing t.o.v. afzender' %}">{% translate "standing" %} {{ m.from_standing|floatformat:1 }}</span>{% endif %}
@@ -348,7 +362,7 @@
                             </div>
                             {% if m.body %}
                                 <details class="mt-1">
-                                    <summary class="small">{% translate "toon bericht" %}</summary>
+                                    <summary class="small">{% translate "toon origineel bericht" %}</summary>
                                     <div class="cs-mail-body">{{ m.body }}</div>
                                 </details>
                             {% endif %}
@@ -359,6 +373,36 @@
                 </ul>
             </div>
         </div>
+
+        <style>
+            .cs-app .cs-tr-out { white-space: pre-wrap; padding: .45rem .6rem; border-left: 3px solid var(--cs-blue);
+                background: rgba(0, 180, 216, .07); border-radius: 4px; color: var(--cs-text); }
+        </style>
+        <script>
+        (function () {
+            document.addEventListener('click', function (e) {
+                var btn = e.target.closest('.cs-tr-btn');
+                if (!btn) return;
+                var li = btn.closest('.cs-mail-item');
+                var out = li.querySelector('.cs-tr-out');
+                if (out.style.display !== 'none') { out.style.display = 'none'; return; }   // toggle dicht
+                out.style.display = '';
+                if (out.dataset.done) return;                                                // al vertaald
+                var src = (li.querySelector('.cs-tr-src').textContent || '').trim().slice(0, 4500);
+                if (!src) { out.textContent = '(geen tekst)'; return; }
+                out.textContent = '⏳ vertalen…';
+                fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=nl&dt=t&q=' + encodeURIComponent(src))
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) {
+                        var txt = (d[0] || []).map(function (s) { return s[0]; }).join('');
+                        var lang = d[2] ? String(d[2]).toUpperCase() + ' → NL' : '';
+                        out.textContent = (lang ? '[' + lang + ']\n' : '') + txt;
+                        out.dataset.done = '1';
+                    })
+                    .catch(function () { out.textContent = '⚠ vertaling mislukt'; });
+            });
+        })();
+        </script>
     </div>
 
     {# Vraag om een reden bij het blacklisten #}

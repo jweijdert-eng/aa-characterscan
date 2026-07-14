@@ -43,17 +43,26 @@
                                 <div class="flex-grow-1" style="min-width:0">
                                     <div class="fw-bold">
                                         <span class="badge bg-{{ v.css }}" title="{{ v.label }}">{{ v.icon }}</span>
-                                        <a href="{% url 'characterscan:recruit_detail' r.pk %}" class="text-decoration-none">
+                                        <a href="{% url 'characterscan:recruit_detail' r.pk %}" class="text-decoration-none" style="color:var(--cs-red)">
                                             {{ r.eve_character.character_name }}
                                         </a>
                                         {% if r.status == "accepted" %}
                                             <span class="badge bg-success">{% translate "Aangenomen" %}</span>
                                         {% elif r.status == "rejected" %}
                                             <span class="badge bg-danger">{% translate "Afgewezen" %}</span>
+                                        {% elif r.status == "in_progress" %}
+                                            <span class="badge bg-info">{% translate "In behandeling" %}</span>
                                         {% else %}
                                             <span class="badge bg-info">{% translate "Nieuw" %}</span>
                                         {% endif %}
                                     </div>
+                                    {% if r.handled_by_name %}
+                                        <div class="small text-muted">
+                                            {% if r.status == "in_progress" %}⏳ {% translate "In behandeling door" %}
+                                            {% else %}&#10003; {% translate "Verwerkt door" %}{% endif %}
+                                            <b style="color:{% if r.status == 'in_progress' %}var(--cs-blue){% else %}#f0932b{% endif %}">{{ r.handled_by_name }}</b>
+                                        </div>
+                                    {% endif %}
                                     <div class="small cs-org">
                                         {% if s.corp_id %}<img src="https://images.evetech.net/corporations/{{ s.corp_id }}/logo?size=32" alt="" class="cs-org-logo">{% endif %}
                                         <span class="cs-corp">{{ s.corp_name }}</span>
@@ -94,6 +103,7 @@
                                     {% endif %}
                                     {% url 'characterscan:recruiter_list' as list_url %}
                                     <div class="d-flex gap-1 mt-2">
+                                        {% if show_actions_on_done or r.status != "accepted" and r.status != "rejected" %}
                                         <form method="post" action="{% url 'characterscan:recruit_action' r.pk %}" class="cs-decide">
                                             {% csrf_token %}
                                             <input type="hidden" name="action" value="accepted">
@@ -108,6 +118,16 @@
                                             <input type="hidden" name="next" value="{{ list_url }}?status={{ status }}">
                                             <button class="btn btn-outline-danger btn-sm">✕</button>
                                         </form>
+                                        {% if r.status != "in_progress" %}
+                                        <form method="post" action="{% url 'characterscan:recruit_action' r.pk %}">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="in_progress">
+                                            <input type="hidden" name="comment" value="">
+                                            <input type="hidden" name="next" value="{{ list_url }}?status={{ status }}">
+                                            <button class="btn btn-outline-primary btn-sm" title="{% translate 'In behandeling nemen' %}">⏳</button>
+                                        </form>
+                                        {% endif %}{# in_progress-knop #}
+                                        {% endif %}{# actie-knoppen bij afgerond #}
                                         <form method="post" action="{% url 'characterscan:recruit_rescan' r.pk %}" class="ms-auto">
                                             {% csrf_token %}
                                             <input type="hidden" name="next" value="{{ list_url }}?status={{ status }}">

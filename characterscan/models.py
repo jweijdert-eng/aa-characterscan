@@ -45,6 +45,11 @@ class Settings(models.Model):
     notify_alerts = models.BooleanField(
         default=True, verbose_name=_("Melden bij nieuwe rode vlag (monitoring)"),
     )
+    show_actions_on_done = models.BooleanField(
+        default=False, verbose_name=_("Actie-knoppen tonen bij afgeronde aanmeldingen"),
+        help_text=_("Uit (standaard): bij afgeronde (aangenomen/afgewezen) aanmeldingen zijn de "
+                    "✓/✕/⏳-knoppen verborgen. Aan: toon ze ook daar, zodat je de status kunt wijzigen."),
+    )
     # Vetting-drempels (admin wint; anders settings.py-fallback)
     wallet_alert_isk = models.BigIntegerField(
         null=True, blank=True, verbose_name=_("Wallet-alarmdrempel (ISK)"),
@@ -100,6 +105,7 @@ class Recruit(models.Model):
 
     class Status(models.TextChoices):
         NEW = "new", _("New")
+        IN_PROGRESS = "in_progress", _("In behandeling")
         ACCEPTED = "accepted", _("Accepted")
         REJECTED = "rejected", _("Rejected")
 
@@ -115,6 +121,11 @@ class Recruit(models.Model):
     notes = models.TextField(blank=True, default="")
     applied_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
+    # Recruiter die de aanmelding heeft opgepakt / verwerkt
+    handled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+", verbose_name=_("In behandeling door"),
+    )
 
     # Doorlopende monitoring: laatste automatische scan-uitkomst
     last_score = models.PositiveSmallIntegerField(null=True, blank=True)
@@ -133,12 +144,27 @@ class Recruit(models.Model):
     def __str__(self) -> str:
         return f"{self.eve_character.character_name} ({self.status})"
 
+    @property
+    def handled_by_name(self) -> str:
+        """Main character-naam van de recruiter die 'm oppakte (of z'n username)."""
+        u = self.handled_by
+        if not u:
+            return ""
+        try:
+            main = u.profile.main_character
+            if main:
+                return main.character_name
+        except Exception:  # noqa: BLE001
+            pass
+        return u.username
+
 
 class RecruitLogEntry(models.Model):
     """Een logregel: wie deed wat met een aanmelding (aannemen/afwijzen/notitie)."""
 
     class Action(models.TextChoices):
         APPLIED = "applied", _("Aangemeld")
+        IN_PROGRESS = "in_progress", _("In behandeling genomen")
         ACCEPTED = "accepted", _("Aangenomen")
         REJECTED = "rejected", _("Afgewezen")
         NEW = "new", _("Heropend")
