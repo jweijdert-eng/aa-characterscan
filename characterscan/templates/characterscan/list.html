@@ -111,7 +111,7 @@
                                         <form method="post" action="{% url 'characterscan:recruit_rescan' r.pk %}" class="ms-auto">
                                             {% csrf_token %}
                                             <input type="hidden" name="next" value="{{ list_url }}?status={{ status }}">
-                                            <button class="btn btn-success btn-sm" title="{% translate 'Nu opnieuw scannen (verse ESI-data)' %}"><span style="color:#ffcc33;font-weight:bold;font-size:1.1em">&#8635;</span></button>
+                                            <button class="btn btn-sm" style="background-color:#fd7e14;border-color:#fd7e14" title="{% translate 'Nu opnieuw scannen (verse ESI-data)' %}"><span style="color:#ffcc33;font-weight:bold;font-size:1.1em">&#8635;</span></button>
                                         </form>
                                     </div>
                                 </div>
