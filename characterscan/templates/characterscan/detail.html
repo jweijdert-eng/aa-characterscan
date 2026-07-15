@@ -28,6 +28,15 @@
                 </div>
             </div>
             <div class="d-flex gap-2">
+                {% if recruit.status == "new" %}
+                {# Nieuw: eerst in behandeling nemen, pas daarna aannemen/afwijzen #}
+                <form method="post" action="{% url 'characterscan:recruit_action' recruit.pk %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="in_progress">
+                    <input type="hidden" name="next" value="{% url 'characterscan:recruit_detail' recruit.pk %}">
+                    <button class="btn btn-primary btn-sm">⏳ {% translate "In behandeling nemen" %}</button>
+                </form>
+                {% elif recruit.status == "in_progress" or show_actions_on_done %}
                 <form method="post" action="{% url 'characterscan:recruit_action' recruit.pk %}">
                     {% csrf_token %}
                     <input type="hidden" name="action" value="accepted">
@@ -40,6 +49,7 @@
                     <input type="hidden" name="next" value="{% url 'characterscan:recruit_detail' recruit.pk %}">
                     <button class="btn btn-outline-danger btn-sm">✕ {% translate "Afwijzen" %}</button>
                 </form>
+                {% endif %}
                 {% if blacklist_available %}
                     {% if already_blacklisted %}
                         <span class="badge bg-danger align-self-center">⛔ {% translate "Op blacklist" %}</span>

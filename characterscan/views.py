@@ -18,7 +18,7 @@ from esi.decorators import token_required
 
 from django.utils import timezone
 
-from .models import Recruit, RecruitLogEntry
+from .models import Recruit, RecruitLogEntry, Settings
 from .profile import basic_stats, full_profile
 from .vetting import (
     ALLIANCE_CONTACTS_SCOPE,
@@ -239,6 +239,7 @@ def recruit_detail(request: WSGIRequest, pk: int) -> HttpResponse:
             "recruit": recruit, "profile": profile, "vetting": vetting,
             "blacklist_available": blacklist_available,
             "already_blacklisted": already_blacklisted,
+            "show_actions_on_done": Settings.load().show_actions_on_done,
         },
     )
 

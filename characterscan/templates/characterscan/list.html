@@ -104,6 +104,7 @@
                                     {% url 'characterscan:recruiter_list' as list_url %}
                                     <div class="d-flex gap-1 mt-2">
                                         {% if show_actions_on_done or r.status != "accepted" and r.status != "rejected" %}
+                                        {% if r.status != "new" %}{# ✓/✕ pas tonen zodra in behandeling (of afgerond met toggle) #}
                                         <form method="post" action="{% url 'characterscan:recruit_action' r.pk %}" class="cs-decide">
                                             {% csrf_token %}
                                             <input type="hidden" name="action" value="accepted">
@@ -118,13 +119,14 @@
                                             <input type="hidden" name="next" value="{{ list_url }}?status={{ status }}">
                                             <button class="btn btn-outline-danger btn-sm">✕</button>
                                         </form>
+                                        {% endif %}{# ✓/✕ verborgen bij Nieuw #}
                                         {% if r.status != "in_progress" %}
                                         <form method="post" action="{% url 'characterscan:recruit_action' r.pk %}">
                                             {% csrf_token %}
                                             <input type="hidden" name="action" value="in_progress">
                                             <input type="hidden" name="comment" value="">
                                             <input type="hidden" name="next" value="{{ list_url }}?status={{ status }}">
-                                            <button class="btn btn-outline-primary btn-sm" title="{% translate 'In behandeling nemen' %}">⏳</button>
+                                            <button class="btn btn-outline-primary btn-sm" title="{% translate 'In behandeling nemen' %}">⏳{% if r.status == "new" %} {% translate 'In behandeling nemen' %}{% endif %}</button>
                                         </form>
                                         {% endif %}{# in_progress-knop #}
                                         {% endif %}{# actie-knoppen bij afgerond #}
