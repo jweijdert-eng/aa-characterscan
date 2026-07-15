@@ -10,12 +10,21 @@ Character Scan haalt z'n data **zelf op via ESI** en is **niet afhankelijk van M
 
 - **Aanmelden** — een recruit koppelt z'n hele account (main + alts) via CharLink.
 - **Recruiter-lijst** — kaarten met portret, corp/alliance-logo's, sec/leeftijd/wallet/SP,
-  een gekleurde verdict-stip en snelacties met notitie. Filters **Nieuw / Afgerond / Totaal**
-  (aangenomen + afgewezen komen samen onder *Afgerond*). Nieuwe recruits worden **parallel**
-  en lichtgewicht gescand (snel); afgeronde recruits tonen hun **opgeslagen** resultaat en
-  worden alleen op verzoek (🔄-knop) opnieuw live gescand.
+  een gekleurde verdict-stip en snelacties met notitie. Filters **Nieuw / In behandeling /
+  Afgerond** (aangenomen + afgewezen komen samen onder *Afgerond*). Nieuwe recruits worden
+  **parallel** en lichtgewicht gescand (snel); afgeronde recruits tonen hun **opgeslagen**
+  resultaat en worden alleen op verzoek (🔄-knop) opnieuw live gescand.
+- **Werkstroom per status** — een recruit gaat van **Nieuw** → *In behandeling nemen* →
+  **Aannemen / Afwijzen**. Wie een recruit in behandeling neemt wordt vastgelegd en getoond
+  ("Verwerkt door …"). Bij *Afgerond* verdwijnen de actieknoppen; via een admin-toggle
+  (*acties tonen bij afgerond*) zet je ze weer aan.
+- **Main-/alt-badge** — elke kaart en het profiel tonen of het character een **alt** is
+  (**ALT · \<main\>**, klikbaar naar EVE Who met portret van de main) of zelf het
+  **main-character**. Afgeleid uit de AA-account-ownership.
 - **Detailprofiel** — gekleurd overzicht (locatie + huidig schip), skills per groep,
   corp-historie (met looptijd per corp), contacts, contracts, clones en assets.
+  Locatie-namen (assets/clones) krijgen hun **in-game security-kleur**; snelkoppelingen naar
+  **EVE Who** en **zKillboard**; gescande mails hebben een **🌐-knop** voor inline-vertaling.
 - **Vetting** met verdict (VEILIG / CONTROLEER / VERDACHT) + **risico-score 0–100**:
   - risk-skills (cyno / black ops / covert ops / recon / jump drive)
   - leeftijd, corp-hopping, security status, lage SP
@@ -37,7 +46,7 @@ Character Scan haalt z'n data **zelf op via ESI** en is **niet afhankelijk van M
 1. Installeer het pakket in je Alliance Auth virtualenv:
 
    ```bash
-   pip install git+https://github.com/jweijdert-eng/aa-characterscan.git@v1.11.4
+   pip install git+https://github.com/jweijdert-eng/aa-characterscan.git@v1.12.3
    ```
 
 2. Voeg toe aan `myauth/settings/local.py`:
@@ -73,7 +82,8 @@ Character Scan haalt z'n data **zelf op via ESI** en is **niet afhankelijk van M
 Bij een upgrade waar nieuwe scopes/taken bij komen:
 
 1. `pip install --upgrade git+https://github.com/jweijdert-eng/aa-characterscan.git@vX.Y.Z`
-2. `python manage.py migrate` (migraties lopen t/m 0010 — o.a. `recruit_last_stats` in v1.11.0)
+2. `python manage.py migrate` (migraties lopen t/m 0013 — o.a. `recruit_last_stats` in v1.11.0,
+   status *In behandeling* + `handled_by` in v1.12.0)
 3. `python manage.py collectstatic --noinput`
 4. **ESI-app bijwerken** met eventuele nieuwe scopes (zie onder).
 5. **Beat-taken** aanwezig? `characterscan_refresh_enemy_standings` én
