@@ -323,3 +323,36 @@
     font-weight: 700; font-size: .72rem; letter-spacing: .02em; vertical-align: middle;
     background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .09);
 }
+
+/* Prominente "Main character"-badge in de detail-header */
+.cs-app .cs-main-badge {
+    display: inline-flex; align-items: center; gap: .5em;
+    padding: .28em .7em .28em .3em; border-radius: 999px;
+    font-size: .9rem; line-height: 1; vertical-align: middle;
+    border: 1px solid var(--cs-border);
+    background: linear-gradient(135deg, rgba(0, 180, 216, .16), rgba(0, 180, 216, .04));
+}
+.cs-app .cs-main-badge img { border: 1px solid rgba(255, 255, 255, .18); }
+.cs-app .cs-main-badge b { color: var(--cs-text); font-weight: 700; }
+.cs-app .cs-main-label {
+    font-size: .66rem; font-weight: 800; letter-spacing: .09em;
+    color: var(--cs-blue); text-transform: uppercase;
+}
+.cs-app .cs-main-ext { color: var(--cs-dim); font-size: .8em; }
+.cs-app .cs-main-of { color: var(--cs-dim); font-size: .82em; }
+.cs-app a.cs-main-alt { text-decoration: none; transition: border-color .12s, background .12s; }
+.cs-app a.cs-main-alt:hover {
+    border-color: var(--cs-blue);
+    background: linear-gradient(135deg, rgba(0, 180, 216, .28), rgba(0, 180, 216, .08));
+}
+.cs-app .cs-main-self {
+    padding-left: .7em;
+    border-color: rgba(62, 207, 110, .4);
+    background: linear-gradient(135deg, rgba(62, 207, 110, .16), rgba(62, 207, 110, .04));
+}
+.cs-app .cs-main-self .cs-main-label { color: var(--cs-green); }
+/* Compacte variant voor de lijstkaarten */
+.cs-app .cs-main-badge.cs-main-sm { padding: .16em .55em .16em .22em; font-size: .78rem; gap: .38em; }
+.cs-app .cs-main-badge.cs-main-sm.cs-main-self { padding-left: .55em; }
+.cs-app .cs-main-badge.cs-main-sm .cs-main-label { font-size: .6rem; }
+.cs-app .cs-main-badge.cs-main-sm img { width: 18px; height: 18px; }

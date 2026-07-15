@@ -109,12 +109,10 @@ def recruiter_list(request: WSGIRequest) -> HttpResponse:
     counts = {row["status"]: row["n"] for row in base.values("status").annotate(n=Count("id"))}
     # Afgerond = verwerkt (aangenomen óf afgewezen); zo blijft "Nieuw" schoon.
     counts["afgerond"] = counts.get("accepted", 0) + counts.get("rejected", 0)
-    counts["all"] = counts.get("new", 0) + counts.get("in_progress", 0) + counts["afgerond"]
     filters = [
         {"key": "new", "label": _("Nieuw"), "count": counts.get("new", 0), "color": "warning"},
         {"key": "in_progress", "label": _("In behandeling"), "count": counts.get("in_progress", 0), "color": "info"},
         {"key": "afgerond", "label": _("Afgerond"), "count": counts.get("afgerond", 0), "color": "success"},
-        {"key": "all", "label": _("Totaal"), "count": counts.get("all", 0), "color": "danger"},
     ]
     if status == "afgerond":
         qs = base.filter(status__in=("accepted", "rejected"))

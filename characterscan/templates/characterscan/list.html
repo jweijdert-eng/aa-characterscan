@@ -73,7 +73,14 @@
                                         {% endif %}
                                     </div>
                                     {% if s.is_alt %}
-                                        <div class="small"><span class="badge bg-secondary">alt van {{ s.owner_main }}</span></div>
+                                        <div class="mt-1"><span class="cs-main-badge cs-main-alt-static cs-main-sm">
+                                            {% if s.owner_main_id %}<img src="https://images.evetech.net/characters/{{ s.owner_main_id }}/portrait?size=32" alt="" width="18" height="18" class="rounded-circle">{% endif %}
+                                            <span class="cs-main-label">{% translate "ALT" %}</span> <b>{{ s.owner_main }}</b>
+                                        </span></div>
+                                    {% elif s.owner_main %}
+                                        <div class="mt-1"><span class="cs-main-badge cs-main-self cs-main-sm">
+                                            <span class="cs-main-label">✓ {% translate "MAIN-CHARACTER" %}</span>
+                                        </span></div>
                                     {% endif %}
                                     <div class="cs-stats">
                                         <span class="cs-stat">

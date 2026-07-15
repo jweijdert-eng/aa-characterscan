@@ -29,6 +29,7 @@ def basic_stats(eve_character, lite=False):
         "wallet": p.get("wallet"),
         "total_sp": p.get("total_sp"),
         "owner_main": p.get("owner_main"),
+        "owner_main_id": p.get("owner_main_id"),
         "is_alt": p.get("is_alt", False),
     }
 

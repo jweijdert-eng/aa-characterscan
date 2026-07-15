@@ -279,10 +279,12 @@ def _owner_info(eve_character):
     try:
         main = eve_character.character_ownership.user.profile.main_character
         if main:
-            return main.character_name, main.character_id != eve_character.character_id
+            return (main.character_name,
+                    main.character_id != eve_character.character_id,
+                    main.character_id)
     except Exception:
         pass
-    return None, False
+    return None, False, None
 
 
 def _skill_injectors(transactions):
@@ -653,7 +655,7 @@ def _fetch_live(eve_character, token, lite=False):
         "second_party_name": name_map.get(j.get("second_party_id")),
     } for j in journal_raw[:1000]]
 
-    owner_main, is_alt = _owner_info(eve_character)
+    owner_main, is_alt, owner_main_id = _owner_info(eve_character)
     return {
         "ok": True,
         "source": "esi",
@@ -662,7 +664,7 @@ def _fetch_live(eve_character, token, lite=False):
         "corp_name": name_map.get(info.get("corporation_id")) if info else eve_character.corporation_name,
         "alliance_id": info.get("alliance_id") if info else eve_character.alliance_id,
         "alliance_name": name_map.get(info.get("alliance_id")) if info and info.get("alliance_id") else eve_character.alliance_name,
-        "owner_main": owner_main, "is_alt": is_alt,
+        "owner_main": owner_main, "is_alt": is_alt, "owner_main_id": owner_main_id,
         "sec": info.get("security_status") if info else None,
         "age_years": _age_years(info.get("birthday")) if info else None,
         "wallet": wallet if isinstance(wallet, (int, float)) else None,
@@ -789,13 +791,13 @@ def _fetch_memberaudit(eve_character):
     except Exception:
         pass
 
-    owner_main, is_alt = _owner_info(eve_character)
+    owner_main, is_alt, owner_main_id = _owner_info(eve_character)
     return {
         "ok": True, "source": "memberaudit",
         "name": eve_character.character_name,
         "corp_id": eve_character.corporation_id, "corp_name": eve_character.corporation_name,
         "alliance_id": eve_character.alliance_id, "alliance_name": eve_character.alliance_name or "",
-        "owner_main": owner_main, "is_alt": is_alt,
+        "owner_main": owner_main, "is_alt": is_alt, "owner_main_id": owner_main_id,
         "sec": getattr(details, "security_status", None),
         "age_years": _age_years(getattr(details, "birthday", None)),
         "wallet": getattr(wallet, "total", None),
@@ -812,13 +814,13 @@ def _fetch_memberaudit(eve_character):
 
 
 def _empty(eve_character):
-    owner_main, is_alt = _owner_info(eve_character)
+    owner_main, is_alt, owner_main_id = _owner_info(eve_character)
     return {
         "ok": False, "source": None,
         "name": eve_character.character_name,
         "corp_id": eve_character.corporation_id, "corp_name": eve_character.corporation_name,
         "alliance_id": eve_character.alliance_id, "alliance_name": eve_character.alliance_name or "",
-        "owner_main": owner_main, "is_alt": is_alt,
+        "owner_main": owner_main, "is_alt": is_alt, "owner_main_id": owner_main_id,
         "sec": None, "age_years": None, "wallet": None, "total_sp": None, "unallocated_sp": None, "skill_count": None,
         "skill_groups": [], "risk_skills": [], "contacts": [], "contracts": [],
         "corp_history": [], "wallet_journal": [],

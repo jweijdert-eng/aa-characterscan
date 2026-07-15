@@ -20,6 +20,23 @@
                     {% endif %}
                     {{ c.corporation_name }}{% if c.alliance_name %} · {{ c.alliance_name }}{% endif %}
                 </div>
+                {% if s.owner_main %}
+                <div class="mt-2">
+                    {% if s.is_alt %}
+                        <a href="https://evewho.com/character/{{ s.owner_main_id }}" target="_blank" rel="noopener"
+                           class="cs-main-badge cs-main-alt" title="{% translate 'Main-character (via AA-account) — open op EVE Who' %}">
+                            {% if s.owner_main_id %}<img src="https://images.evetech.net/characters/{{ s.owner_main_id }}/portrait?size=64" alt="" width="28" height="28" class="rounded-circle">{% endif %}
+                            <span class="cs-main-label">{% translate "ALT" %}</span>
+                            <b>{{ s.owner_main }}</b>
+                            <span class="cs-main-ext">↗</span>
+                        </a>
+                    {% else %}
+                        <span class="cs-main-badge cs-main-self" title="{% translate 'Dit is zelf het main-character' %}">
+                            <span class="cs-main-label">✓ {% translate "MAIN-CHARACTER" %}</span>
+                        </span>
+                    {% endif %}
+                </div>
+                {% endif %}
                 <div class="mt-2 d-flex gap-2 flex-wrap">
                     <a href="https://evewho.com/character/{{ c.character_id }}" target="_blank" rel="noopener"
                        class="btn btn-outline-info btn-sm">🔎 {% translate "EVE Who" %} ↗</a>
