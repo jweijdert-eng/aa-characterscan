@@ -24,7 +24,9 @@ Character Scan haalt z'n data **zelf op via ESI** en is **niet afhankelijk van M
 - **Detailprofiel** — gekleurd overzicht (locatie + huidig schip), skills per groep,
   corp-historie (met looptijd per corp), contacts, contracts, clones en assets.
   Locatie-namen (assets/clones) krijgen hun **in-game security-kleur**; snelkoppelingen naar
-  **EVE Who** en **zKillboard**; gescande mails hebben een **🌐-knop** voor inline-vertaling.
+  **EVE Who** en **zKillboard**. Ook de **bio** (character-omschrijving) staat als apart blok,
+  met de gevonden vijanden/verdachte termen als badge; gescande mails én de bio hebben een
+  **🌐-knop** voor inline-vertaling.
 - **Vetting** met verdict (VEILIG / CONTROLEER / VERDACHT) + **risico-score 0–100**:
   - risk-skills (cyno / black ops / covert ops / recon / jump drive)
   - leeftijd, corp-hopping, security status, lage SP
@@ -32,6 +34,8 @@ Character Scan haalt z'n data **zelf op via ESI** en is **niet afhankelijk van M
   - **wallet-scan** op grote/verdachte ISK-bewegingen en ISK met vijanden
   - **mail-scan** — verdachte termen + niet-vertrouwde links (blauwe/eigen afzenders
     worden overgeslagen); mailcontact met vijanden
+  - **bio-scan** — verdachte termen + niet-vertrouwde links in de character-omschrijving,
+    en vijanden die in de bio worden genoemd of via in-game-links gelinkt zijn
   - **jump clones** en **assets** in vijandelijk gebied (structure-eigenaar / sovereignty)
   - **zKillboard** — kills/losses/danger, associates (vliegt met vijand?), schip-/gebiedsprofiel,
     (in)activiteit
@@ -46,7 +50,7 @@ Character Scan haalt z'n data **zelf op via ESI** en is **niet afhankelijk van M
 1. Installeer het pakket in je Alliance Auth virtualenv:
 
    ```bash
-   pip install git+https://github.com/jweijdert-eng/aa-characterscan.git@v1.12.3
+   pip install git+https://github.com/jweijdert-eng/aa-characterscan.git@v1.13.0
    ```
 
 2. Voeg toe aan `myauth/settings/local.py`:
