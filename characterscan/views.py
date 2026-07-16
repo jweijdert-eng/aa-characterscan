@@ -154,6 +154,25 @@ def recruiter_list(request: WSGIRequest) -> HttpResponse:
             stats, verdict = r.last_stats, _verdict_from_level(r.last_verdict)
             fresh = False
         recruits.append({"recruit": r, "stats": stats, "verdict": verdict, "fresh": fresh})
+
+    # Blacklist-flash: markeer recruits die (character/corp/alliance) op de
+    # allianceauth-blacklist staan — één bulk-query. Zonder de plugin: overslaan.
+    try:
+        from blacklist.models import EveNote
+        all_ids = set()
+        for item in recruits:
+            ec = item["recruit"].eve_character
+            all_ids.update(filter(None, [ec.character_id, ec.corporation_id, ec.alliance_id]))
+        bl_ids = set(EveNote.objects.filter(eve_id__in=all_ids, blacklisted=True)
+                     .values_list("eve_id", flat=True)) if all_ids else set()
+        for item in recruits:
+            ec = item["recruit"].eve_character
+            item["blacklisted"] = any(i in bl_ids for i in
+                                      (ec.character_id, ec.corporation_id, ec.alliance_id) if i)
+    except Exception:  # noqa: BLE001 — blacklist-plugin niet geïnstalleerd
+        for item in recruits:
+            item["blacklisted"] = False
+
     from .vetting import standings_token_exists
 
     from .models import Settings
