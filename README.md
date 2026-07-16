@@ -50,7 +50,7 @@ Character Scan haalt z'n data **zelf op via ESI** en is **niet afhankelijk van M
 1. Installeer het pakket in je Alliance Auth virtualenv:
 
    ```bash
-   pip install git+https://github.com/jweijdert-eng/aa-characterscan.git@v1.13.0
+   pip install git+https://github.com/jweijdert-eng/aa-characterscan.git@v1.14.0
    ```
 
 2. Voeg toe aan `myauth/settings/local.py`:
@@ -168,6 +168,10 @@ blacklist:
 - een blacklist-hit → rode vlag **"Op de blacklist"** (met de reden), gewicht 80 in de risico-score;
 - een gewone/restricted notitie → waarschuwing **"Blacklist-notitie"**;
 - schoon → **"Niet op de blacklist"**.
+
+Op de **recruiter-lijst** krijgt een geblackliste recruit bovendien een knipperende
+**⛔ BLACKLIST**-badge (attention-seeker) plus een rode kaart-rand, zodat je 'm niet mist.
+De animatie respecteert `prefers-reduced-motion`.
 
 Recruiters met het recht `blacklist.add_to_blacklist` kunnen een recruit ook **direct vanuit de
 detailpagina** op de blacklist zetten (knop met verplichte reden). Zonder de plugin wordt de check
