@@ -37,6 +37,7 @@ RISK_WEIGHTS = {
     "Huidige corp/alliance": 60,
     "ISK met vijand": 45,
     "Mail met vijand": 45,
+    "Vijand in bio": 40,
     "Clone in vijandgebied": 45,
     "Vliegt met vijand": 45,
     "Awox-verdenking": 55,
@@ -50,6 +51,7 @@ RISK_WEIGHTS = {
     "Onverdeelde SP": 15,
     "SP vs. leeftijd": 15,
     "Verdachte mails": 15,
+    "Verdachte bio": 15,
     "Werkgevershistorie": 12,
     "ISK-donatie (in)": 10,
     "Risk-skills": 8,
@@ -718,6 +720,35 @@ def assess(eve_character, enemy, with_zkill=True):
                 flag("bad", "danger", "Mail met vijand", "; ".join(list(dict.fromkeys(hits))[:5]))
             else:
                 flag("ok", "success", "Mail met vijand", "Geen mailcontact met bekende vijanden")
+
+    # Bio-scan (character description): verdachte termen/externe links + gelinkte
+    # of genoemde vijanden. Vijanden komen uit de in-game showinfo-links (ids) én
+    # uit namen die letterlijk in de bio-tekst staan.
+    bio = (profile.get("bio") or "").strip()
+    if bio:
+        bio_enemies = []
+        if enemy:
+            for eid in profile.get("bio_ids", []):
+                if eid in enemy:
+                    bio_enemies.append(enemy[eid])
+            low = bio.lower()
+            for eid, name in enemy.items():
+                if not name or name.startswith("#") or len(name) < 4:
+                    continue
+                if re.search(r"\b" + re.escape(name.lower()) + r"\b", low):
+                    bio_enemies.append(name)
+            bio_enemies = list(dict.fromkeys(bio_enemies))
+        terms = _scan_text(bio)
+        if bio_enemies:
+            bad += 1
+            flag("bad", "danger", "Vijand in bio", "Genoemd/gelinkt: " + ", ".join(bio_enemies[:6]))
+        if terms:
+            warn += 1
+            flag("warn", "warning", "Verdachte bio", ", ".join(sorted(terms)))
+        if not bio_enemies and not terms:
+            flag("ok", "success", "Bio", "Geen verdachte termen, links of vijanden")
+    else:
+        flag("info", "secondary", "Bio", "Leeg")
 
     # Jump clones + assets in vijandelijk gebied (structure-eigenaar of sov)
     clones = profile.get("clones")

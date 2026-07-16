@@ -3,6 +3,8 @@ Weergave-laag: leest het canonieke data-dict uit esi_fetch en markeert vijanden.
 Character Scan is hiermee niet meer afhankelijk van Member Audit-modellen.
 """
 
+import re
+
 from .esi_fetch import get_profile, sov_map
 from .vetting import (
     _fmt_isk,
@@ -134,10 +136,30 @@ def full_profile(eve_character, enemy=None):
         "top_sources": [{"type": t, "amount_fmt": _fmt_isk(v)} for t, v in top_sources],
     }
 
+    # Bio: platte tekst + de suspect-scan (termen/links) en gelinkte/genoemde vijanden
+    bio_text = p.get("bio", "") or ""
+    bio_enemies = []
+    if bio_text and enemy:
+        low = bio_text.lower()
+        for eid in p.get("bio_ids", []):
+            if eid in enemy:
+                bio_enemies.append(enemy[eid])
+        for eid, name in enemy.items():
+            if name and not name.startswith("#") and len(name) >= 4 and \
+                    re.search(r"\b" + re.escape(name.lower()) + r"\b", low):
+                bio_enemies.append(name)
+        bio_enemies = list(dict.fromkeys(bio_enemies))
+    bio = {
+        "text": bio_text,
+        "suspect": sorted(_scan_text(bio_text, trusted)) if bio_text else [],
+        "enemies": bio_enemies,
+    }
+
     return {
         "stats": basic_stats(eve_character),
         "registered": p.get("ok", False),
         "source": p.get("source"),
+        "bio": bio,
         "skill_groups": p.get("skill_groups", []),
         "corp_history": p.get("corp_history", []),
         "contacts": p.get("contacts", []),

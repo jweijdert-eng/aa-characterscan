@@ -307,6 +307,22 @@ def _skill_injectors(transactions):
     }
 
 
+def _decode_bio(desc):
+    """EVE-character-descriptions komen soms als Python-repr uit ESI, bv.
+    ``u'<font ...>...'`` mét escapes (\\n, \\') erin. Pak die uit tot de echte
+    HTML zodat de bio-scan op schone tekst/links werkt."""
+    desc = desc or ""
+    if desc[:2] in ("u'", 'u"'):
+        try:
+            import ast
+            val = ast.literal_eval(desc)
+            if isinstance(val, str):
+                return val
+        except Exception:  # noqa: BLE001
+            pass
+    return desc
+
+
 def _strip_html(html):
     """EVE-mail-body (HTML) → platte tekst."""
     h = re.sub(r"<br\s*/?>", "\n", html or "", flags=re.I)
@@ -655,6 +671,12 @@ def _fetch_live(eve_character, token, lite=False):
         "second_party_name": name_map.get(j.get("second_party_id")),
     } for j in journal_raw[:1000]]
 
+    # Bio (character description): repr-quirk uitpakken, dan platte tekst + de
+    # entity-ids uit in-game showinfo-links (showinfo:<typeID>//<itemID>).
+    bio_raw = _decode_bio(info.get("description")) if info else ""
+    bio_text = _strip_html(bio_raw)
+    bio_ids = [int(m) for m in re.findall(r"showinfo:\d+//(\d+)", bio_raw)]
+
     owner_main, is_alt, owner_main_id = _owner_info(eve_character)
     return {
         "ok": True,
@@ -667,6 +689,8 @@ def _fetch_live(eve_character, token, lite=False):
         "owner_main": owner_main, "is_alt": is_alt, "owner_main_id": owner_main_id,
         "sec": info.get("security_status") if info else None,
         "age_years": _age_years(info.get("birthday")) if info else None,
+        "bio": bio_text,
+        "bio_ids": bio_ids,
         "wallet": wallet if isinstance(wallet, (int, float)) else None,
         "total_sp": (skills_raw or {}).get("total_sp") if isinstance(skills_raw, dict) else None,
         "unallocated_sp": (skills_raw or {}).get("unallocated_sp") if isinstance(skills_raw, dict) else None,

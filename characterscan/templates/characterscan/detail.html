@@ -164,7 +164,7 @@
         <div class="col-md-6">
             <div class="card h-100">
                 <div class="card-header">🏛 {% translate "Corp-historie" %}</div>
-                <ul class="list-group list-group-flush" style="max-height:320px;overflow:auto">
+                <ul class="list-group list-group-flush">
                     {% for h in profile.corp_history %}
                         <li class="list-group-item {% if h.is_enemy %}list-group-item-danger{% endif %}">
                             <div class="d-flex justify-content-between align-items-center gap-2">
@@ -215,7 +215,7 @@
         <div class="col-md-6">
             <div class="card h-100">
                 <div class="card-header">⚖ {% translate "Contacts" %}</div>
-                <ul class="list-group list-group-flush" style="max-height:320px;overflow:auto">
+                <ul class="list-group list-group-flush">
                     {% for ct in profile.contacts %}
                         <li class="list-group-item d-flex justify-content-between align-items-center gap-2 {% if ct.is_enemy and ct.standing > 0 %}list-group-item-danger{% endif %}">
                             <span class="d-inline-flex align-items-center gap-2 {% if ct.is_enemy %}text-danger fw-bold{% endif %}" style="min-width:0">
@@ -236,7 +236,7 @@
         <div class="col-md-6">
             <div class="card h-100">
                 <div class="card-header">◧ {% translate "Contracts" %}</div>
-                <ul class="list-group list-group-flush" style="max-height:360px;overflow:auto">
+                <ul class="list-group list-group-flush">
                     {% for ct in profile.contracts %}
                         <li class="list-group-item cs-contract {% if ct.is_enemy %}list-group-item-danger{% endif %}">
                             <div class="d-flex justify-content-between align-items-start gap-2">
@@ -268,7 +268,7 @@
         <div class="col-md-6">
             <div class="card h-100">
                 <div class="card-header">🧬 {% translate "Jump clones" %}{% if profile.clones %} <span class="text-muted small">— {{ profile.clones.jump_count }}</span>{% endif %}</div>
-                <ul class="list-group list-group-flush" style="max-height:320px;overflow:auto">
+                <ul class="list-group list-group-flush">
                     {% if profile.clones.home %}
                         <li class="list-group-item {% if profile.clones.home.is_enemy %}list-group-item-danger{% endif %}">
                             <div class="d-flex justify-content-between align-items-center gap-2">
@@ -298,7 +298,7 @@
         <div class="col-md-6">
             <div class="card h-100">
                 <div class="card-header">🗄 {% translate "Assets" %}{% if profile.assets %} <span class="text-muted small">— {{ profile.assets.count }} items · {{ profile.assets.location_count }} loc.</span>{% endif %}</div>
-                <ul class="list-group list-group-flush" style="max-height:320px;overflow:auto">
+                <ul class="list-group list-group-flush">
                     {% for a in profile.assets.locations %}
                         <li class="list-group-item {% if a.is_enemy %}list-group-item-danger{% endif %}">
                             <div class="d-flex justify-content-between align-items-center gap-2">
@@ -338,7 +338,7 @@
                         {% endif %}
                     </div>
                 {% endif %}
-                <ul class="list-group list-group-flush" style="max-height:340px;overflow:auto">
+                <ul class="list-group list-group-flush">
                     {% for e in profile.wallet.entries %}
                         <li class="list-group-item d-flex justify-content-between align-items-center gap-2 {% if e.is_enemy %}list-group-item-danger{% endif %}">
                             <span class="d-inline-flex flex-column" style="min-width:0">
@@ -359,13 +359,42 @@
             </div>
         </div>
 
+        {# Bio (character description) — zelfde card-stijl als Wallet #}
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">📝 {% translate "Bio" %}
+                    <span class="text-muted small">— {% translate "gescand op verdachte termen, externe links en vijanden" %}</span>
+                    {% if profile.bio.enemies %}<span class="badge bg-danger ms-1">⚠ {% translate "vijand in bio" %}</span>{% endif %}
+                    {% for e in profile.bio.enemies %}<span class="badge bg-danger ms-1">{{ e }}</span>{% endfor %}
+                    {% for t in profile.bio.suspect %}<span class="badge bg-warning ms-1">{{ t }}</span>{% endfor %}
+                    {% if profile.bio.text and not profile.bio.enemies and not profile.bio.suspect %}<span class="badge bg-secondary ms-1"><span class="text-cs-green">✓</span> {% translate "schoon" %}</span>{% endif %}
+                </div>
+                <div class="card-body cs-mail-item">
+                    {% if profile.bio.text %}
+                        <button type="button" class="btn btn-link btn-sm p-0 cs-tr-btn float-end ms-2" style="text-decoration:none;font-size:1rem;line-height:1"
+                                title="{% translate 'Vertaal bio (auto → NL)' %}">🌐</button>
+                        <div class="cs-tr-src cs-bio-text">{{ profile.bio.text }}</div>
+                        <div class="cs-tr-out small mt-1" style="display:none"></div>
+                    {% else %}
+                        <span class="text-muted">{% translate "Geen bio ingevuld." %}</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <style>
+            .cs-app .cs-bio-text {
+                white-space: pre-wrap; word-break: break-word;
+                color: var(--cs-text); font-size: .9rem; line-height: 1.4;
+            }
+        </style>
+
         {# Mails (gescand) #}
         <div class="col-12">
             <div class="card">
                 <div class="card-header">✉ {% translate "Mails (gescand)" %}
                     <span class="text-muted small">— {% translate "laatste 15; onderwerp + inhoud op verdachte termen, externe links en vijandcontact" %}</span>
                 </div>
-                <ul class="list-group list-group-flush" style="max-height:460px;overflow:auto">
+                <ul class="list-group list-group-flush">
                     {% for m in profile.mails %}
                         <li class="list-group-item cs-mail-item {% if m.is_enemy %}list-group-item-danger{% endif %}">
                             <div class="d-flex justify-content-between align-items-start gap-2">
