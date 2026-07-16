@@ -14,7 +14,7 @@ class SettingsAdmin(admin.ModelAdmin):
             "fields": ("discord_webhook", "notify_new_application", "notify_alerts"),
         }),
         ("Lijst-weergave", {
-            "fields": ("show_actions_on_done",),
+            "fields": ("show_actions_on_done", "wait_alert_hours"),
         }),
         ("Vetting-drempels", {
             "fields": ("wallet_alert_isk", "injector_alert",

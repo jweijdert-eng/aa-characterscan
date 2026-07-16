@@ -52,6 +52,7 @@ RISK_WEIGHTS = {
     "SP vs. leeftijd": 15,
     "Verdachte mails": 15,
     "Verdachte bio": 15,
+    "Discord": 8,
     "Werkgevershistorie": 12,
     "ISK-donatie (in)": 10,
     "Risk-skills": 8,
@@ -132,6 +133,33 @@ def _cs_settings():
         return Settings.load()
     except Exception:  # noqa: BLE001
         return None
+
+
+def account_discord(eve_character):
+    """Discord-koppeling van het AA-account achter dit character (AA Discord-service).
+
+    Een gekoppelde Discord = het account zit in de server. → dict
+    {"linked": bool, "uid": int|None, "username": str|None}, of None als de
+    Discord-service niet is geïnstalleerd (dan slaan we de check over).
+    """
+    try:
+        from allianceauth.services.modules.discord.models import DiscordUser
+    except Exception:  # noqa: BLE001 — Discord-service niet geïnstalleerd
+        return None
+    user = getattr(getattr(eve_character, "character_ownership", None), "user", None)
+    if user is None:
+        try:
+            from allianceauth.authentication.models import CharacterOwnership
+            co = CharacterOwnership.objects.filter(character=eve_character).select_related("user").first()
+            user = co.user if co else None
+        except Exception:  # noqa: BLE001
+            user = None
+    if user is None:
+        return {"linked": False, "uid": None, "username": None}
+    du = DiscordUser.objects.filter(user=user).first()
+    if du:
+        return {"linked": True, "uid": du.uid, "username": du.username or str(du.uid)}
+    return {"linked": False, "uid": None, "username": None}
 
 
 def trusted_domains():
@@ -572,6 +600,15 @@ def assess(eve_character, enemy, with_zkill=True):
             flag("warn", "warning", "Blacklist-notitie", "; ".join(_bl_item(n) for n in bl["notes"][:5]))
         else:
             flag("ok", "success", "Blacklist", "Niet op de blacklist")
+
+    # Discord-koppeling (AA Discord-service): zit de recruit in de server?
+    disc = account_discord(eve_character)
+    if disc is not None:
+        if disc["linked"]:
+            flag("ok", "success", "Discord", f"Gekoppeld: <b>{disc['username']}</b> — in de server")
+        else:
+            warn += 1
+            flag("warn", "warning", "Discord", "Geen Discord gekoppeld — (nog) niet in de server")
 
     # Risk-skills
     risk = profile.get("risk_skills", [])

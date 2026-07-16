@@ -59,6 +59,11 @@ class Settings(models.Model):
         null=True, blank=True, verbose_name=_("Skill-injector-drempel"),
         help_text=_("Waarschuwing vanaf dit aantal gekochte Large injectors. Leeg = standaard 5."),
     )
+    wait_alert_hours = models.PositiveSmallIntegerField(
+        null=True, blank=True, verbose_name=_("Wachttijd-alarmdrempel (uren)"),
+        help_text=_("Markeer aanmeldingen die zó lang op een beslissing wachten (nieuw/in "
+                    "behandeling). Leeg = standaard 48 uur."),
+    )
     trusted_link_domains = models.TextField(
         blank=True, default="", verbose_name=_("Vertrouwde link-domeinen"),
         help_text=_("Eén per regel (of komma-gescheiden). Links hierheen tellen niet als "

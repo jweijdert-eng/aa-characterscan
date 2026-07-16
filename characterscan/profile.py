@@ -11,6 +11,7 @@ from .vetting import (
     _location_enemy,
     _parse_date,
     _scan_text,
+    account_discord,
     mail_is_friendly,
     trusted_domains,
 )
@@ -33,6 +34,7 @@ def basic_stats(eve_character, lite=False):
         "owner_main": p.get("owner_main"),
         "owner_main_id": p.get("owner_main_id"),
         "is_alt": p.get("is_alt", False),
+        "discord": account_discord(eve_character),
     }
 
 

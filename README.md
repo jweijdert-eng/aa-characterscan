@@ -43,14 +43,21 @@ Character Scan haalt z'n data **zelf op via ESI** en is **niet afhankelijk van M
   - **vijandenlijst** automatisch uit de corp + alliance-standings (standing < 0)
 - **Doorlopende monitoring** — aangenomen leden worden periodiek herscand; nieuwe rode
   vlaggen worden gelogd en (optioneel) naar Discord gepusht.
-- **Discord-webhook** — nieuwe aanmeldingen + rode-vlag-meldingen, instelbaar in de admin.
+- **Wachttijd-signaal** — nieuwe/in-behandeling aanmeldingen tonen een ⏰-badge met de
+  wachttijd sinds aanmelding (rood zodra de drempel is overschreden); een periodieke taak
+  stuurt een Discord-herinnering met alle te lang wachtende aanmeldingen.
+- **Discord-cross-check** — als de [AA Discord-service](https://allianceauth.readthedocs.io/en/latest/features/services/discord.html)
+  actief is, ziet een recruiter op de lijst en in de vetting of het account een Discord
+  heeft gekoppeld (= in de server) of niet.
+- **Discord-webhook** — nieuwe aanmeldingen + rode-vlag-meldingen + wachttijd-herinneringen,
+  instelbaar in de admin.
 
 ## Installatie
 
 1. Installeer het pakket in je Alliance Auth virtualenv:
 
    ```bash
-   pip install git+https://github.com/jweijdert-eng/aa-characterscan.git@v1.14.0
+   pip install git+https://github.com/jweijdert-eng/aa-characterscan.git@v1.15.0
    ```
 
 2. Voeg toe aan `myauth/settings/local.py`:
@@ -66,6 +73,11 @@ Character Scan haalt z'n data **zelf op via ESI** en is **niet afhankelijk van M
    # Herscan aangenomen leden (loyaliteitscheck) — elke 6 uur.
    CELERYBEAT_SCHEDULE["characterscan_rescan_members"] = {
        "task": "characterscan.tasks.rescan_members",
+       "schedule": 21600,
+   }
+   # Herinner aan aanmeldingen die te lang wachten — elke 6 uur.
+   CELERYBEAT_SCHEDULE["characterscan_remind_waiting"] = {
+       "task": "characterscan.tasks.remind_waiting_recruits",
        "schedule": 21600,
    }
    ```
@@ -86,12 +98,12 @@ Character Scan haalt z'n data **zelf op via ESI** en is **niet afhankelijk van M
 Bij een upgrade waar nieuwe scopes/taken bij komen:
 
 1. `pip install --upgrade git+https://github.com/jweijdert-eng/aa-characterscan.git@vX.Y.Z`
-2. `python manage.py migrate` (migraties lopen t/m 0013 — o.a. `recruit_last_stats` in v1.11.0,
-   status *In behandeling* + `handled_by` in v1.12.0)
+2. `python manage.py migrate` (migraties lopen t/m 0014 — o.a. `recruit_last_stats` in v1.11.0,
+   status *In behandeling* + `handled_by` in v1.12.0, `wait_alert_hours` in v1.15.0)
 3. `python manage.py collectstatic --noinput`
 4. **ESI-app bijwerken** met eventuele nieuwe scopes (zie onder).
-5. **Beat-taken** aanwezig? `characterscan_refresh_enemy_standings` én
-   `characterscan_rescan_members`.
+5. **Beat-taken** aanwezig? `characterscan_refresh_enemy_standings`,
+   `characterscan_rescan_members` én `characterscan_remind_waiting`.
 6. **Bestaande recruits opnieuw laten linken** via CharLink als er scopes zijn
    bijgekomen (anders ontbreekt de nieuwe data tot ze her-autoriseren).
 7. Services herstarten (gunicorn + celery worker + **beat**).
@@ -115,6 +127,7 @@ Optioneel in `local.py`:
 |---|---|---|
 | `CHARACTERSCAN_WALLET_ALERT_ISK` | `1_000_000_000` | drempel (ISK) voor de wallet-scan |
 | `CHARACTERSCAN_INJECTOR_ALERT` | `5` | drempel (aantal Large injectors) voor de waarschuwing |
+| `wait_alert_hours` (admin) | `48` | wachttijd (uren) waarna een aanmelding als "te lang wachtend" wordt gemarkeerd |
 | `CHARACTERSCAN_ENEMY_IDS` | `[]` | handmatige extra vijand-ids (corp/alliance/character) |
 | `CHARACTERSCAN_TRUSTED_LINK_DOMAINS` | `[]` | extra vertrouwde domeinen voor de mail-linkscan |
 | `CHARACTERSCAN_RISK_WEIGHTS` | `{}` | overschrijf punten per signaal, bv. `{"Vijand in historie": 50}` |
@@ -176,6 +189,12 @@ De animatie respecteert `prefers-reduced-motion`.
 Recruiters met het recht `blacklist.add_to_blacklist` kunnen een recruit ook **direct vanuit de
 detailpagina** op de blacklist zetten (knop met verplichte reden). Zonder de plugin wordt de check
 netjes overgeslagen (geen harde afhankelijkheid).
+
+### AA Discord-service (optioneel)
+
+Is de ingebouwde **Discord-service** van Alliance Auth actief, dan toont de plugin per recruit of
+het account een Discord heeft gekoppeld (💬 gebruikersnaam = in de server) of niet (⚠ geen Discord)
+— zowel op de recruiter-lijst als als vetting-signaal. Zonder de service wordt de check overgeslagen.
 
 ## Afhankelijkheden
 

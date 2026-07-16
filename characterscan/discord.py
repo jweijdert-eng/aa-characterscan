@@ -101,3 +101,25 @@ def notify_flags(eve_character, verdict, score, flags, note=None):
     if s and not s.notify_alerts:
         return False
     return _post(_embed(eve_character, "🚩 ", verdict=verdict, score=score, flags=flags, note=note))
+
+
+def notify_waiting(items, hours):
+    """Herinnering op Discord aan aanmeldingen die te lang wachten.
+
+    `items` = lijst van (character_name, character_id, wachttijd-label). → True bij succes.
+    """
+    if not items:
+        return False
+    s = _db_settings()
+    if s and not s.notify_alerts:
+        return False
+    lines = [f"• [{name}](https://zkillboard.com/character/{cid}/) — {waited}"
+             for name, cid, waited in items[:25]]
+    if len(items) > 25:
+        lines.append(f"… en nog {len(items) - 25}")
+    return _post({
+        "title": f"⏰ {len(items)} aanmelding(en) wachten al langer dan {hours} uur",
+        "description": "\n".join(lines),
+        "color": 0xF0C040,
+        "footer": {"text": "Character Scan"},
+    })

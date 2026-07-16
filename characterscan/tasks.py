@@ -24,6 +24,44 @@ def refresh_enemy_standings():
 
 
 @shared_task
+def remind_waiting_recruits():
+    """Herinner op Discord aan aanmeldingen die te lang op een beslissing wachten.
+
+    Draait periodiek via Celery-beat. Vindt nieuwe/in-behandeling recruits ouder
+    dan de drempel (Settings.wait_alert_hours, standaard 48u) en post één
+    samenvatting naar de Discord-webhook.
+    """
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from .discord import notify_waiting
+    from .models import Recruit, Settings
+
+    hours = Settings.load().wait_alert_hours or 48
+    cutoff = timezone.now() - timedelta(hours=hours)
+    qs = (Recruit.objects
+          .filter(status__in=(Recruit.Status.NEW, Recruit.Status.IN_PROGRESS),
+                  applied_at__lte=cutoff)
+          .select_related("eve_character").order_by("applied_at"))
+
+    now = timezone.now()
+    items = []
+    for r in qs:
+        waited_h = (now - r.applied_at).total_seconds() / 3600
+        label = f"{int(waited_h / 24)}d" if waited_h >= 24 else f"{int(waited_h)}u"
+        items.append((r.eve_character.character_name, r.eve_character.character_id, label))
+
+    if items:
+        try:
+            notify_waiting(items, hours)
+        except Exception:  # noqa: BLE001
+            logger.warning("remind_waiting_recruits: Discord-melding faalde", exc_info=True)
+    logger.info("Character Scan: %d wachtende aanmelding(en) gemeld.", len(items))
+    return len(items)
+
+
+@shared_task
 def rescan_members():
     """Herscan aangenomen leden en waarschuw bij NIEUWE rode vlaggen (loyaliteitscheck).
 

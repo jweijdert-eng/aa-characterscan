@@ -173,6 +173,24 @@ def recruiter_list(request: WSGIRequest) -> HttpResponse:
         for item in recruits:
             item["blacklisted"] = False
 
+    # Wachttijd-signaal: hoe lang wacht een nieuwe/in-behandeling aanmelding al?
+    from django.utils import timezone
+
+    from .models import Settings
+    wait_threshold = Settings.load().wait_alert_hours or 48  # uren
+    now = timezone.now()
+    for item in recruits:
+        r = item["recruit"]
+        if r.status in ("new", "in_progress") and r.applied_at:
+            hours = (now - r.applied_at).total_seconds() / 3600
+            days = hours / 24
+            item["waiting"] = {
+                "label": f"{int(days)}d" if days >= 1 else f"{int(hours)}u",
+                "overdue": hours >= wait_threshold,
+            }
+        else:
+            item["waiting"] = None
+
     from .vetting import standings_token_exists
 
     from .models import Settings
