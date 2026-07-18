@@ -114,6 +114,47 @@
         </div>
     </div>
 
+    {# Gekoppelde characters (main + alts die de recruit zelf koppelde) #}
+    {% if profile.account.count %}
+    <div class="card mb-3">
+        <div class="card-header d-flex align-items-center justify-content-between">
+            <span>👥 {% translate "Gekoppelde characters" %}
+                <span class="badge {% if profile.account.count == 1 %}bg-warning text-dark{% else %}bg-secondary{% endif %}">{{ profile.account.count }}</span>
+            </span>
+            {% if profile.account.count == 1 %}
+                <span class="cs-alt-hint">⚠ {% translate "maar één character gekoppeld — vraag of dit al z'n characters zijn" %}</span>
+            {% endif %}
+        </div>
+        <div class="card-body">
+            <div class="cs-alts">
+                {% for a in profile.account.chars %}
+                    <div class="cs-alt {% if a.is_this %}cs-alt-this{% endif %}">
+                        <img src="https://images.evetech.net/characters/{{ a.character_id }}/portrait?size=64"
+                             alt="" class="cs-alt-portrait" width="40" height="40">
+                        <div class="cs-alt-tekst">
+                            <div class="cs-alt-naam">
+                                {{ a.character_name }}
+                                {% if a.is_main %}<span class="badge bg-primary">{% translate "main" %}</span>{% endif %}
+                                {% if a.is_this %}<span class="badge bg-info text-dark">{% translate "deze" %}</span>{% endif %}
+                            </div>
+                            <div class="cs-alt-corp">{{ a.corporation_name }}{% if a.alliance_name %} · {{ a.alliance_name }}{% endif %}</div>
+                        </div>
+                        <div class="cs-alt-acties">
+                            {% if a.recruit_pk and not a.is_this %}
+                                <a href="{% url 'characterscan:recruit_detail' a.recruit_pk %}" class="btn btn-sm btn-outline-info">{% translate "scan" %}</a>
+                            {% endif %}
+                            <a href="https://zkillboard.com/character/{{ a.character_id }}/" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">zKill ↗</a>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+            <p class="cs-alt-note">
+                {% blocktranslate %}Dit zijn alleen de characters die de recruit zelf via CharLink heeft gekoppeld. EVE laat niet zien of iemand nog niet-gekoppelde alts heeft — een verborgen alt is dus niet zichtbaar.{% endblocktranslate %}
+            </p>
+        </div>
+    </div>
+    {% endif %}
+
     <div class="row g-3">
         {# Overzicht #}
         <div class="col-md-6">

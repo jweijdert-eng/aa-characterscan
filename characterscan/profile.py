@@ -38,6 +38,49 @@ def basic_stats(eve_character, lite=False):
     }
 
 
+def account_characters(eve_character):
+    """Alle characters die op hetzelfde AA-account gekoppeld zijn als deze recruit.
+
+    Dit toont uitsluitend wat de recruit ZELF via CharLink heeft gekoppeld —
+    EVE/ESI verraadt geen verborgen alts. Waarde voor de recruiter: in één blik
+    zien hoeveel characters er gekoppeld zijn (koppelt iemand er maar één, dan is
+    dat een moment om te vragen "is dat echt alles?").
+    """
+    from .models import Recruit
+
+    try:
+        from allianceauth.eveonline.models import EveCharacter
+
+        ownership = eve_character.character_ownership
+        user = ownership.user
+        main = getattr(getattr(user, "profile", None), "main_character", None)
+        main_id = main.character_id if main else None
+        chars = EveCharacter.objects.filter(character_ownership__user=user)
+    except Exception:  # noqa: BLE001 — geen koppeling/ownership beschikbaar
+        return {"chars": [], "count": 0, "main_id": None}
+
+    # Welke van die characters staan al als recruit? (voor snelle doorklik-links)
+    recruit_pk = {
+        r.eve_character_id: r.pk
+        for r in Recruit.objects.filter(eve_character__in=chars)
+    }
+
+    rijen = []
+    for ec in chars:
+        rijen.append({
+            "character_id": ec.character_id,
+            "character_name": ec.character_name,
+            "corporation_name": ec.corporation_name,
+            "alliance_name": ec.alliance_name,
+            "is_main": ec.character_id == main_id,
+            "is_this": ec.character_id == eve_character.character_id,
+            "recruit_pk": recruit_pk.get(ec.id),
+        })
+    # Main eerst, dan op naam.
+    rijen.sort(key=lambda r: (not r["is_main"], r["character_name"].lower()))
+    return {"chars": rijen, "count": len(rijen), "main_id": main_id}
+
+
 def full_profile(eve_character, enemy=None):
     """Alle secties voor de detailpagina; markeert vijanden als `enemy` is meegegeven."""
     enemy = enemy or {}
@@ -161,6 +204,7 @@ def full_profile(eve_character, enemy=None):
         "stats": basic_stats(eve_character),
         "registered": p.get("ok", False),
         "source": p.get("source"),
+        "account": account_characters(eve_character),
         "bio": bio,
         "skill_groups": p.get("skill_groups", []),
         "corp_history": p.get("corp_history", []),
