@@ -80,9 +80,9 @@
                                     {% if s.discord %}
                                         <div class="small mt-1">
                                             {% if s.discord.linked %}
-                                                <span class="text-cs-green" title="{% translate 'Discord gekoppeld — in de server' %}">&#128172; {{ s.discord.username }}</span>
+                                                <span class="text-cs-green" title="{% translate 'Discord gekoppeld — in de server' %}"><img src="https://dutchlegionsdashboard.eu/discord.png" alt="Discord" style="width:24px;height:24px;vertical-align:middle;margin-right:2px;"> {{ s.discord.username }}</span>
                                             {% else %}
-                                                <span class="text-warning" title="{% translate 'Geen Discord gekoppeld' %}">&#128172; {% translate "geen Discord" %}</span>
+                                                <span class="text-warning" title="{% translate 'Geen Discord gekoppeld' %}"><img src="https://dutchlegionsdashboard.eu/discord.png" alt="Discord" style="width:24px;height:24px;vertical-align:middle;margin-right:2px;"> {% translate "geen Discord" %}</span>
                                             {% endif %}
                                         </div>
                                     {% endif %}
