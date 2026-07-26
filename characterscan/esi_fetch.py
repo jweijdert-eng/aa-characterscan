@@ -139,16 +139,34 @@ def _parallel(jobs, max_workers=10):
 
 
 def _names(ids):
-    names, ids = {}, list({i for i in ids if i})
-    for i in range(0, len(ids), 1000):
+    """Namen voor entity-ids via /universe/names.
+
+    Die endpoint geeft **404 op de HELE batch** zodra ook maar één id onresolvebaar
+    is (een player-structure, een verwijderd character, e.d.) — waardoor vroeger
+    álle namen op hun id terugvielen. Daarom bij een fout de batch **binair
+    opsplitsen**: zo krijgen alle goede ids tóch een naam en slaan we alleen het
+    rotte id over.
+    """
+    names, todo = {}, list({int(i) for i in ids if i})
+
+    def resolve(batch):
+        if not batch:
+            return
         try:
             r = requests.post(f"{ESI}/universe/names/?datasource=tranquility",
-                              json=ids[i:i + 1000], headers=UA, timeout=8)
-            if r.ok:
-                for x in r.json():
-                    names[x["id"]] = x["name"]
+                              json=batch, headers=UA, timeout=8)
         except Exception:
-            pass
+            return
+        if r.ok:
+            for x in r.json():
+                names[x["id"]] = x["name"]
+        elif len(batch) > 1:                       # onbekend id ertussen → opsplitsen
+            mid = len(batch) // 2
+            resolve(batch[:mid])
+            resolve(batch[mid:])
+
+    for i in range(0, len(todo), 1000):
+        resolve(todo[i:i + 1000])
     return names
 
 
