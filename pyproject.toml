@@ -13,8 +13,13 @@ keywords = [
     "characterscan",
 ]
 license = { file = "LICENSE" }
+# De projectopzet komt van Peter Pfeufers AA-plugin-sjabloon; die credit blijft
+# staan. De plugin zelf wordt hier onderhouden.
 authors = [
     { name = "Peter Pfeufer", email = "develop@ppfeufer.de" },
+]
+maintainers = [
+    { name = "jweijdert-eng" },
 ]
 requires-python = ">=3.10,<3.15"
 classifiers = [
@@ -43,8 +48,8 @@ dependencies = [
     "django-eveuniverse>=2",   # skill→groep-resolutie (los van Member Audit)
     "aa-charlink>=1.12",       # koppel-flow voor recruit- en standings-tokens
 ]
-urls.Changelog = "https://github.com/ppfeufer/aa-characterscan/blob/master/CHANGELOG.md"
-urls.Tracker = "https://github.com/ppfeufer/aa-characterscan/issues"
+urls.Changelog = "https://github.com/jweijdert-eng/aa-characterscan/blob/main/CHANGELOG.md"
+urls.Tracker = "https://github.com/jweijdert-eng/aa-characterscan/issues"
 
 [tool.hatch]
 version.path = "characterscan/__init__.py"

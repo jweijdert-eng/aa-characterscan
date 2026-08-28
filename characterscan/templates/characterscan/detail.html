@@ -86,6 +86,10 @@
         <div class="alert alert-warning">
             {% blocktranslate %}Geen data — dit character is nog niet via CharLink gekoppeld.{% endblocktranslate %}
         </div>
+    {% elif not profile.volledig %}
+        <div class="alert alert-warning">
+            {% blocktranslate %}ESI gaf niet alles terug — beoordeel dit character nog niet op wat je hier ziet. Scan over een minuutje opnieuw.{% endblocktranslate %}
+        </div>
     {% endif %}
 
     {# Vetting #}

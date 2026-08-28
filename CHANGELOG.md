@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [In Development] - Unreleased
 
+## [1.18.0] - 2026-08-28
+
+### Fixed
+
+- **ESI-foutlimiet (420).** Al het ESI-verkeer loopt nu via één deur
+  (`esi_client.py`) die het foutbudget bewaakt. ESI telt ongeveer honderd fouten
+  per zestig seconden *per IP* — dus over alle AA-plugins heen — en zet je
+  daarna met een 420 buiten de deur. Character Scan groef dat gat zelf: één
+  volledige scan is veertien gelijktijdige calls plus tientallen vervolgcalls,
+  `rescan_members` doet dat voor elk aangenomen lid, en één character met een
+  ingetrokken token levert veertien 403's in één klap.
+  - De foutteller (`X-Esi-Error-Limit-Remain`) wordt bij **elk** antwoord
+    gelezen, ook bij foute — dat is juist het moment waarop hij slinkt. Onder de
+    twintig legt de plugin zichzelf stil, gedeeld door webserver, Celery-worker
+    en alle scanthreads.
+  - Een 420 wordt niet opnieuw geprobeerd; dat verlengt alleen de straf.
+  - `/universe/names/` splitst een afgewezen batch nog steeds binair op om het
+    ene rotte id te vinden, maar niet meer bij een foutlimiet.
+- **Half opgehaalde profielen gingen als compleet de cache in.** Een mislukte
+  pagina brak de lus af en die halve lijst werd tien minuten lang als waarheid
+  getoond — een recruit leek dan geen wallet, skills of contacten te hebben.
+  Nu wordt zo'n profiel als onvolledig gemarkeerd, staat dat op de detailpagina,
+  en gaat het maar een minuut mee.
+- **Mislukte locaties bleven een week "onbekend".** Een 403 of 420 op
+  `/universe/structures/` werd zeven dagen gecached, net als een geslaagde
+  lookup. Mislukkingen houden we nu een uur vast; dat geldt ook voor
+  system-security en de corp→alliance-lookup.
+- **User-Agent** was `aa-characterscan (local eval)`. CCP knijpt juist op
+  User-Agent af; er staan nu naam, versie en repo in.
+- Alle calls delen één `requests.Session` met connection-pooling, in plaats van
+  per call een nieuwe TLS-verbinding op te zetten.
+
+### Changed
+
+- `pyproject.toml` verwees voor changelog en issues nog naar de repo van het
+  plugin-sjabloon; die wijzen nu hierheen. De credit voor het sjabloon blijft.
+
 ## [1.17.0] - 2026-08-10
 
 ### Added

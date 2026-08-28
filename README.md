@@ -180,6 +180,24 @@ Voor de standings heeft een **director** bovendien `esi-corporations.read_contac
 `esi-alliances.read_contacts.v1` nodig. Zorg dat al deze scopes op je EVE-applicatie
 (developers.eveonline.com) staan.
 
+### Als ESI 420 geeft (error limited)
+
+ESI telt fouten: ongeveer honderd per zestig seconden, **per IP** — dus over al je
+AA-plugins heen. Ga je eroverheen, dan krijg je 420 op alles, ook op calls die het
+prima zouden doen.
+
+Character Scan is daar een grootverbruiker: één volledige scan is veertien
+gelijktijdige calls plus tientallen vervolgcalls voor mailbodies, killmails en
+locaties, en `rescan_members` doet dat voor elk aangenomen lid. Sinds 1.18.0 loopt
+alles via één deur (`esi_client.py`) die de foutteller bij **elk** antwoord leest —
+ook bij foute, want dat is juist waar hij slinkt — en zichzelf stillegt zodra het
+budget onder de twintig komt. Een 420 wordt niet herhaald.
+
+Kwam er tóch niet alles binnen, dan staat dat boven de detailpagina: *"ESI gaf niet
+alles terug"*. Beoordeel een recruit dan nog niet, want een half profiel ziet eruit
+als iemand zonder wallet, skills of contacten. Zo'n profiel wordt maar een minuut
+gecached, dus een minuutje later opnieuw scannen is genoeg.
+
 ## Integraties
 
 ### allianceauth-blacklist (optioneel)

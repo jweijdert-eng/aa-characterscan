@@ -11,19 +11,22 @@ Zo is Character Scan niet langer afhankelijk van Member Audit.
 
 import logging
 import re
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone as dt_timezone
-
-import requests
 
 from django.core.cache import cache
 from django.utils import timezone
 
+from . import esi_client
+
 logger = logging.getLogger(__name__)
 
-ESI = "https://esi.evetech.net/latest"
-UA = {"User-Agent": "aa-characterscan (local eval)"}
 PROFILE_CACHE_SECONDS = 600  # 10 min — houd paginabezoeken snel
+# Kwam er niet alles binnen (meestal het ESI-foutbudget), dan bewaren we dat
+# maar kort. Een half profiel tien minuten lang als waarheid tonen laat een
+# recruit eruitzien alsof hij niets heeft.
+PROFILE_CACHE_ONVOLLEDIG = 60
 
 # Scopes die een recruit via CharLink verleent (recruit-data). Zelfde set als de
 # oorspronkelijke recruiting-app.
@@ -96,78 +99,89 @@ def _age_years(birthday):
 
 
 # ── ESI helpers ──────────────────────────────────────────────────────────────
+# Alles gaat via esi_client, dat het gedeelde foutbudget bewaakt. Zie de
+# module-docstring daar: één scan is honderd calls, en een character met een
+# ingetrokken token levert er veertien fouten tegelijk op.
+
 def _pub(path):
-    try:
-        r = requests.get(f"{ESI}{path}?datasource=tranquility", headers=UA, timeout=8)
-        if r.ok:
-            return r.json()
-    except Exception:
-        pass
-    return None
+    """Publieke call. None = niet gelukt."""
+    return esi_client.get(path, timeout=8)[0]
 
 
 def _auth(path, token, paged=False):
-    out, page = [], 1
-    while True:
-        try:
-            r = requests.get(
-                f"{ESI}{path}?datasource=tranquility&page={page}",
-                headers={**UA, "Authorization": f"Bearer {token}"}, timeout=10,
-            )
-        except Exception:
-            break
-        if not r.ok:
-            return None if not out else out
-        data = r.json()
-        if not paged:
-            return data
-        out.extend(data or [])
-        if page >= int(r.headers.get("X-Pages", 1) or 1) or not data:
-            break
-        page += 1
-    return out
+    """Call met token. Geeft de data, of None als er niets binnenkwam.
+
+    Bij `paged=True` komt er een **halve** lijst terug als pagina drie mislukt.
+    Dat is met opzet zichtbaar gemaakt: `_onvolledig` onthoudt dat er iets miste,
+    zodat `_fetch_live` het profiel als onvolledig kan markeren in plaats van de
+    helft van iemands contacten als "dit is alles" te presenteren.
+    """
+    if paged:
+        rijen, volledig = esi_client.paged(path, token)
+        if not volledig:
+            _onvolledig.markeer(path)
+        return rijen
+    data, fout = esi_client.get(path, token)
+    if fout:
+        _onvolledig.markeer(path)
+    return data
+
+
+class _Onvolledig(threading.local):
+    """Per thread bijhouden of er iets miste tijdens deze scan.
+
+    Thread-local omdat `_parallel` de calls over tien threads verdeelt; een
+    gewone variabele zou van de ene scan in de andere lekken.
+    """
+
+    def start(self):
+        self.paden = []
+
+    def markeer(self, path):
+        if not hasattr(self, "paden"):
+            self.paden = []
+        self.paden.append(path)
+
+    def gemist(self):
+        return list(getattr(self, "paden", []))
+
+
+_onvolledig = _Onvolledig()
 
 
 def _parallel(jobs, max_workers=10):
     """Voer een dict {key: callable} gelijktijdig uit → {key: resultaat}.
-    Scheelt veel laadtijd t.o.v. de calls serieel afvuren."""
+    Scheelt veel laadtijd t.o.v. de calls serieel afvuren.
+
+    De workers erven de "er miste iets"-vlag niet automatisch (die is
+    thread-local), dus geven ze hun eigen gemiste paden terug aan de aanroeper.
+    """
     if not jobs:
         return {}
+
+    def wrap(fn):
+        def run():
+            _onvolledig.start()
+            try:
+                return fn(), _onvolledig.gemist()
+            finally:
+                _onvolledig.start()
+        return run
+
     with ThreadPoolExecutor(max_workers=min(max_workers, len(jobs))) as ex:
-        futs = {k: ex.submit(fn) for k, fn in jobs.items()}
-        return {k: f.result() for k, f in futs.items()}
+        futs = {k: ex.submit(wrap(fn)) for k, fn in jobs.items()}
+        uit = {}
+        for k, f in futs.items():
+            resultaat, gemist = f.result()
+            uit[k] = resultaat
+            for path in gemist:
+                _onvolledig.markeer(path)
+        return uit
 
 
 def _names(ids):
-    """Namen voor entity-ids via /universe/names.
-
-    Die endpoint geeft **404 op de HELE batch** zodra ook maar één id onresolvebaar
-    is (een player-structure, een verwijderd character, e.d.) — waardoor vroeger
-    álle namen op hun id terugvielen. Daarom bij een fout de batch **binair
-    opsplitsen**: zo krijgen alle goede ids tóch een naam en slaan we alleen het
-    rotte id over.
-    """
-    names, todo = {}, list({int(i) for i in ids if i})
-
-    def resolve(batch):
-        if not batch:
-            return
-        try:
-            r = requests.post(f"{ESI}/universe/names/?datasource=tranquility",
-                              json=batch, headers=UA, timeout=8)
-        except Exception:
-            return
-        if r.ok:
-            for x in r.json():
-                names[x["id"]] = x["name"]
-        elif len(batch) > 1:                       # onbekend id ertussen → opsplitsen
-            mid = len(batch) // 2
-            resolve(batch[:mid])
-            resolve(batch[mid:])
-
-    for i in range(0, len(todo), 1000):
-        resolve(todo[i:i + 1000])
-    return names
+    """Namen voor entity-ids via /universe/names (zie esi_client.namen)."""
+    return esi_client.namen(ids)
 
 
 def sov_map():
@@ -176,15 +190,10 @@ def sov_map():
     cached = cache.get(key)
     if cached is not None:
         return cached
-    out = {}
-    try:
-        r = requests.get(f"{ESI}/sovereignty/map/?datasource=tranquility", headers=UA, timeout=15)
-        if r.ok:
-            for row in r.json():
-                if row.get("alliance_id"):
-                    out[row["system_id"]] = row["alliance_id"]
-    except Exception:
-        pass
+    data, _ = esi_client.get("/sovereignty/map/", timeout=15)
+    if data is None:
+        return {}      # niets binnen: niet zes uur lang een lege kaart bewaren
+    out = {row["system_id"]: row["alliance_id"] for row in data if row.get("alliance_id")}
     cache.set(key, out, 6 * 3600)
     return out
 
@@ -197,27 +206,24 @@ def resolve_location(location_id, access=None):
     cached = cache.get(key)
     if cached is not None:
         return cached or None
-    info = None
-    try:
-        if location_id > 1_000_000_000_000:  # player-structure (citadel)
-            if access:
-                r = requests.get(
-                    f"{ESI}/universe/structures/{location_id}/?datasource=tranquility",
-                    headers={**UA, "Authorization": f"Bearer {access}"}, timeout=8)
-                if r.ok:
-                    d = r.json()
-                    info = {"name": d.get("name"), "system_id": d.get("solar_system_id"),
-                            "owner_corp_id": d.get("owner_id"), "kind": "structure"}
-        elif 60_000_000 <= location_id < 64_000_000:  # NPC-station
-            r = requests.get(f"{ESI}/universe/stations/{location_id}/?datasource=tranquility",
-                             headers=UA, timeout=8)
-            if r.ok:
-                d = r.json()
-                info = {"name": d.get("name"), "system_id": d.get("system_id"),
-                        "owner_corp_id": d.get("owner"), "kind": "station"}
-    except Exception:
-        pass
-    cache.set(key, info or {}, 7 * 86400)
+    info, fout = None, None
+    if location_id > 1_000_000_000_000:  # player-structure (citadel)
+        if access:
+            d, fout = esi_client.get(f"/universe/structures/{location_id}/", access, timeout=8)
+            if d:
+                info = {"name": d.get("name"), "system_id": d.get("solar_system_id"),
+                        "owner_corp_id": d.get("owner_id"), "kind": "structure"}
+    elif 60_000_000 <= location_id < 64_000_000:  # NPC-station
+        d, fout = esi_client.get(f"/universe/stations/{location_id}/", timeout=8)
+        if d:
+            info = {"name": d.get("name"), "system_id": d.get("system_id"),
+                    "owner_corp_id": d.get("owner"), "kind": "station"}
+
+    # Een gelukte lookup is een week goed — namen veranderen zelden. Een
+    # mislukte was vroeger óók een week goed, en dat is het verschil tussen
+    # "die citadel bestaat niet" en "we hadden even geen dockingrechten of geen
+    # foutbudget": zo'n structuur heette daarna zeven dagen "onbekend".
+    cache.set(key, info or {}, 7 * 86400 if info or not fout else 3600)
     return info
 
 
@@ -226,14 +232,9 @@ def _affiliations(char_ids):
     ids = list({c for c in char_ids if c})
     out = {}
     for i in range(0, len(ids), 1000):
-        try:
-            r = requests.post(f"{ESI}/characters/affiliation/?datasource=tranquility",
-                              json=ids[i:i + 1000], headers=UA, timeout=8)
-            if r.ok:
-                for x in r.json():
-                    out[x["character_id"]] = (x.get("corporation_id"), x.get("alliance_id"))
-        except Exception:
-            pass
+        data, _ = esi_client.post("/characters/affiliation/", ids[i:i + 1000], timeout=8)
+        for x in data or []:
+            out[x["character_id"]] = (x.get("corporation_id"), x.get("alliance_id"))
     return out
 
 
@@ -435,15 +436,11 @@ def system_security(system_id):
     cached = cache.get(key)
     if cached is not None:
         return None if cached == "none" else cached
-    sec = None
-    try:
-        r = requests.get(f"{ESI}/universe/systems/{system_id}/?datasource=tranquility",
-                         headers=UA, timeout=8)
-        if r.ok:
-            sec = r.json().get("security_status")
-    except Exception:  # noqa: BLE001
-        pass
-    cache.set(key, "none" if sec is None else sec, 7 * 86400)
+    data, fout = esi_client.get(f"/universe/systems/{system_id}/", timeout=8)
+    sec = data.get("security_status") if data else None
+    # Zie resolve_location: een mislukking is geen feit over dit systeem, dus
+    # die houden we een uur vast in plaats van een week.
+    cache.set(key, "none" if sec is None else sec, 7 * 86400 if not fout else 3600)
     return sec
 
 
@@ -496,6 +493,7 @@ def _fetch_live(eve_character, token, lite=False):
     """
     cid = eve_character.character_id
     access = token.valid_access_token()
+    _onvolledig.start()
 
     # Basis-calls: altijd nodig (ook voor de lijst)
     jobs = {
@@ -696,9 +694,16 @@ def _fetch_live(eve_character, token, lite=False):
     bio_ids = [int(m) for m in re.findall(r"showinfo:\d+//(\d+)", bio_raw)]
 
     owner_main, is_alt, owner_main_id = _owner_info(eve_character)
+    gemist = _onvolledig.gemist()
+    if gemist:
+        logger.warning("Character Scan: onvolledige scan voor %s — %s call(s) misten, "
+                       "bv. %s", cid, len(gemist), gemist[0])
     return {
         "ok": True,
         "source": "esi",
+        # False = er misten calls (meestal het foutbudget). De weergave zegt dat
+        # erbij, en get_profile bewaart zo'n profiel maar kort.
+        "volledig": not gemist,
         "name": eve_character.character_name,
         "corp_id": info.get("corporation_id") if info else eve_character.corporation_id,
         "corp_name": name_map.get(info.get("corporation_id")) if info else eve_character.corporation_name,
@@ -858,7 +863,7 @@ def _fetch_memberaudit(eve_character):
 def _empty(eve_character):
     owner_main, is_alt, owner_main_id = _owner_info(eve_character)
     return {
-        "ok": False, "source": None,
+        "ok": False, "source": None, "volledig": False,
         "name": eve_character.character_name,
         "corp_id": eve_character.corporation_id, "corp_name": eve_character.corporation_name,
         "alliance_id": eve_character.alliance_id, "alliance_name": eve_character.alliance_name or "",
@@ -904,5 +909,11 @@ def get_profile(eve_character, force=False, lite=False):
         profile = _empty(eve_character)
 
     profile["character_id"] = cid
-    cache.set(lite_key if lite else full_key, profile, PROFILE_CACHE_SECONDS)
+    profile.setdefault("volledig", True)
+    # Een profiel waarin calls misten (of dat helemaal niet opgehaald kon
+    # worden) niet tien minuten vasthouden: dan blijft één 420 een kwartier
+    # lang zichtbaar als een recruit zonder wallet, skills of contacten.
+    ttl = PROFILE_CACHE_SECONDS if profile.get("volledig") and profile.get("ok") \
+        else PROFILE_CACHE_ONVOLLEDIG
+    cache.set(lite_key if lite else full_key, profile, ttl)
     return profile

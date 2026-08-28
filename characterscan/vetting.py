@@ -16,9 +16,9 @@ from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
 
+from . import esi_client
+from .esi_client import UA          # ook zKillboard wil weten wie er belt
 from .esi_fetch import get_profile, ma_character, sov_map
-
-UA = {"User-Agent": "aa-characterscan (local eval)"}
 
 VERDICTS = {
     "bad": {"level": "bad", "label": "VERDACHT", "css": "danger", "icon": "⛔"},
@@ -264,40 +264,13 @@ def _fmt_isk(v):
 
 
 # ── Gedeelde ESI-helpers (voor de org-standings) ─────────────────────────────
+# Via esi_client, zodat deze calls hetzelfde foutbudget delen als de scans.
 def _esi_paged(path, token_str):
-    out, page = [], 1
-    while True:
-        try:
-            r = requests.get(
-                f"https://esi.evetech.net/latest{path}?datasource=tranquility&page={page}",
-                headers={**UA, "Authorization": f"Bearer {token_str}"}, timeout=8,
-            )
-        except Exception:
-            break
-        if not r.ok:
-            break
-        chunk = r.json() or []
-        out.extend(chunk)
-        if page >= int(r.headers.get("X-Pages", 1) or 1) or not chunk:
-            break
-        page += 1
-    return out
+    return esi_client.paged(path, token_str, timeout=8)[0]
 
 
 def _resolve_names(ids):
-    names, ids = {}, [i for i in ids if i]
-    for i in range(0, len(ids), 1000):
-        try:
-            r = requests.post(
-                "https://esi.evetech.net/latest/universe/names/?datasource=tranquility",
-                json=ids[i:i + 1000], headers=UA, timeout=8,
-            )
-            if r.ok:
-                for x in r.json():
-                    names[x["id"]] = x["name"]
-        except Exception:
-            pass
-    return names
+    return esi_client.namen(ids)
 
 
 def _is_npc_corp(corp_id):
@@ -313,17 +286,11 @@ def corp_alliance(corp_id):
     cached = cache.get(key)
     if cached is not None:
         return cached or None
-    alliance_id = None
-    try:
-        r = requests.get(
-            f"https://esi.evetech.net/latest/corporations/{corp_id}/?datasource=tranquility",
-            headers=UA, timeout=6,
-        )
-        if r.ok:
-            alliance_id = r.json().get("alliance_id")
-    except Exception:
-        pass
-    cache.set(key, alliance_id or 0, 7 * 86400)
+    data, fout = esi_client.get(f"/corporations/{corp_id}/", timeout=6)
+    alliance_id = data.get("alliance_id") if data else None
+    # Een mislukte call is geen bewijs dat deze corp in geen alliance zit; die
+    # onthouden we een uur in plaats van een week.
+    cache.set(key, alliance_id or 0, 7 * 86400 if not fout else 3600)
     return alliance_id
 
 

@@ -204,6 +204,10 @@ def full_profile(eve_character, enemy=None):
         "stats": basic_stats(eve_character),
         "registered": p.get("ok", False),
         "source": p.get("source"),
+        # False = er misten ESI-calls. Dat hoort op het scherm: een half
+        # profiel ziet eruit als een recruit zonder wallet, skills of
+        # contacten, en daar wordt een oordeel op gebaseerd.
+        "volledig": p.get("volledig", True),
         "account": account_characters(eve_character),
         "bio": bio,
         "skill_groups": p.get("skill_groups", []),
