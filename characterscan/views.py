@@ -232,6 +232,36 @@ def activity_log(request: WSGIRequest) -> HttpResponse:
 
 @login_required
 @permission_required("characterscan.recruiter")
+def onboarding_status(request: WSGIRequest) -> HttpResponse:
+    """Zijn de (nieuwe) leden netjes door het systeem gekomen?
+
+    Eén rij per AA-account met de stand van alle onboarding-stappen. De rijen
+    worden 10 minuten gecached; "Ververs" haalt ze opnieuw op.
+    """
+    from .onboarding import overview
+
+    scope = request.GET.get("scope", "new")
+    if scope not in ("new", "incomplete", "all"):
+        scope = "new"
+    force = request.GET.get("refresh") == "1"
+    data = overview(scope=scope, force=force)
+    if force:
+        messages.success(request, _("Onboarding-status opnieuw opgehaald."))
+
+    scopes = [
+        {"key": "new", "label": _("Nieuwe leden (%(d)d dagen)") % {"d": data["days"]}, "color": "info"},
+        {"key": "incomplete", "label": _("Onvolledig"), "color": "warning"},
+        {"key": "all", "label": _("Alle accounts"), "color": "secondary"},
+    ]
+    return render(
+        request,
+        "characterscan/onboarding.html",
+        {**data, "scope": scope, "scopes": scopes, "active_tab": "onboarding"},
+    )
+
+
+@login_required
+@permission_required("characterscan.recruiter")
 @token_required(scopes=[CORP_CONTACTS_SCOPE, ALLIANCE_CONTACTS_SCOPE])
 def grant_standings(request: WSGIRequest, token) -> HttpResponse:
     """Eenmalig een director-token koppelen; daarna verloopt alles automatisch."""

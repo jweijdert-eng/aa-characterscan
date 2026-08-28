@@ -41,6 +41,13 @@ Character Scan haalt z'n data **zelf op via ESI** en is **niet afhankelijk van M
     (in)activiteit
   - **killmail-diepteanalyse** — samen met vijand op een kill + awox (eigen lid gekilld)
   - **vijandenlijst** automatisch uit de corp + alliance-standings (standing < 0)
+- **Onboarding-status** — tabblad dat per AA-account laat zien of een nieuw lid netjes door
+  het systeem is gekomen: main character, AA-state, groepen, álle characters gekoppeld,
+  tokens nog geldig, Discord, TeamSpeak, de clone-stappen uit de
+  [Onboarding Checklist](https://github.com/jweijdert-eng/aa-onboarding-checklist)-plugin en
+  Member Audit. Filters *Nieuwe leden / Onvolledig / Alle accounts*, met een voortgangsbalk
+  en de openstaande stappen per lid. Elke bron is optioneel — ontbreekt een service of
+  plugin, dan vervalt die kolom (`–`) in plaats van te klappen.
 - **Doorlopende monitoring** — aangenomen leden worden periodiek herscand; nieuwe rode
   vlaggen worden gelogd en (optioneel) naar Discord gepusht.
 - **Wachttijd-signaal** — nieuwe/in-behandeling aanmeldingen tonen een ⏰-badge met de
@@ -128,6 +135,9 @@ Optioneel in `local.py`:
 | `CHARACTERSCAN_WALLET_ALERT_ISK` | `1_000_000_000` | drempel (ISK) voor de wallet-scan |
 | `CHARACTERSCAN_INJECTOR_ALERT` | `5` | drempel (aantal Large injectors) voor de waarschuwing |
 | `wait_alert_hours` (admin) | `48` | wachttijd (uren) waarna een aanmelding als "te lang wachtend" wordt gemarkeerd |
+| `onboarding_new_days` (admin) | `30` | hoe lang een aangenomen recruit als *nieuw lid* op het onboarding-overzicht staat |
+| `onboarding_state` (admin) | leeg | verwachte AA-state (bv. `Member`); leeg = alles behalve *Guest* is goed |
+| `onboarding_groups` (admin) | leeg | verplichte groepsnamen (één per regel); leeg = minstens één groep volstaat |
 | `CHARACTERSCAN_ENEMY_IDS` | `[]` | handmatige extra vijand-ids (corp/alliance/character) |
 | `CHARACTERSCAN_TRUSTED_LINK_DOMAINS` | `[]` | extra vertrouwde domeinen voor de mail-linkscan |
 | `CHARACTERSCAN_RISK_WEIGHTS` | `{}` | overschrijf punten per signaal, bv. `{"Vijand in historie": 50}` |

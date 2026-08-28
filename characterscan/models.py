@@ -64,6 +64,23 @@ class Settings(models.Model):
         help_text=_("Markeer aanmeldingen die zó lang op een beslissing wachten (nieuw/in "
                     "behandeling). Leeg = standaard 48 uur."),
     )
+    # Onboarding-overzicht: wanneer telt iemand als "nieuw lid" en wat moet er
+    # geregeld zijn voordat hij goed door het systeem heen is.
+    onboarding_new_days = models.PositiveSmallIntegerField(
+        null=True, blank=True, verbose_name=_("Nieuw lid tot (dagen)"),
+        help_text=_("Hoe lang een aangenomen recruit op het onboarding-overzicht als "
+                    "nieuw lid meetelt. Leeg = standaard 30 dagen."),
+    )
+    onboarding_state = models.CharField(
+        max_length=50, blank=True, default="", verbose_name=_("Verwachte state"),
+        help_text=_("Naam van de AA-state die een volwaardig lid hoort te hebben, bijv. "
+                    "Member. Leeg = elke state behalve Guest is goed."),
+    )
+    onboarding_groups = models.TextField(
+        blank=True, default="", verbose_name=_("Verplichte groepen"),
+        help_text=_("Groepen die een nieuw lid moet hebben — één per regel of "
+                    "komma-gescheiden. Leeg = minstens één groep volstaat."),
+    )
     trusted_link_domains = models.TextField(
         blank=True, default="", verbose_name=_("Vertrouwde link-domeinen"),
         help_text=_("Eén per regel (of komma-gescheiden). Links hierheen tellen niet als "
@@ -94,6 +111,12 @@ class Settings(models.Model):
 
     def extra_enemy_id_list(self):
         return [int(t) for t in self._split(self.extra_enemy_ids) if t.isdigit()]
+
+    def onboarding_group_list(self):
+        """Verplichte groepsnamen. Splitst op regel/komma — nooit op spatie,
+        want groepsnamen bevatten die ("Corp Member")."""
+        import re
+        return [g.strip() for g in re.split(r"[\r\n,]+", self.onboarding_groups or "") if g.strip()]
 
     def save(self, *args, **kwargs):
         self.pk = 1  # singleton

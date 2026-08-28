@@ -1,0 +1,125 @@
+{% extends 'characterscan/base.html' %}
+
+{% load i18n %}
+{% load humanize %}
+
+{% block details %}
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <h2 class="mb-0">{% translate "Onboarding-status" %}</h2>
+        <a href="?scope={{ scope }}&amp;refresh=1" class="btn btn-sm cs-scan"
+           title="{% translate 'Alles opnieuw ophalen (omzeilt de 10-minuten-cache)' %}">
+            <span style="font-weight:bold;font-size:1.15em">&#8635;</span> {% translate "Ververs" %}
+        </a>
+    </div>
+
+    {% include 'characterscan/_tabs.html' %}
+
+    <div class="d-flex gap-2 flex-wrap mb-3 align-items-center">
+        {% for f in scopes %}
+            <a href="?scope={{ f.key }}"
+               class="btn btn-sm {% if scope == f.key %}btn-{{ f.color }}{% else %}btn-outline-{{ f.color }}{% endif %}">
+                {{ f.label }}
+            </a>
+        {% endfor %}
+        {% if rows %}
+            <span class="ms-auto small text-muted">
+                {{ rows|length }} {% translate "account(s)" %} ·
+                {% if n_incomplete %}
+                    <span class="text-warning">{{ n_incomplete }} {% translate "nog niet compleet" %}</span>
+                {% else %}
+                    <span class="text-cs-green">{% translate "iedereen compleet" %}</span>
+                {% endif %}
+            </span>
+        {% endif %}
+    </div>
+
+    {% if not rows %}
+        <div class="alert alert-secondary">
+            {% translate "Geen accounts die aan dit filter voldoen." %}
+        </div>
+    {% else %}
+        <div class="card">
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0 cs-onb-table">
+                    <thead>
+                        <tr>
+                            <th>{% translate "Lid" %}</th>
+                            <th class="text-nowrap">{{ since_label }}</th>
+                            {% for c in columns %}
+                                <th class="text-center cs-onb-col" title="{{ c.label }}">
+                                    <span class="cs-onb-ico">{{ c.icon }}</span>
+                                    <span class="cs-onb-colname">{{ c.label }}</span>
+                                </th>
+                            {% endfor %}
+                            <th class="text-nowrap">{% translate "Voortgang" %}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in rows %}
+                            <tr class="{% if r.complete %}cs-onb-ok{% elif r.pct < 50 %}cs-onb-bad{% else %}cs-onb-warn{% endif %}">
+                                <td>
+                                    <div class="d-flex align-items-center gap-2">
+                                        {% if r.main_id %}
+                                            <img src="https://images.evetech.net/characters/{{ r.main_id }}/portrait?size=32"
+                                                 alt="" width="28" height="28" class="rounded-circle">
+                                        {% endif %}
+                                        <div style="min-width:0">
+                                            <div class="fw-bold text-truncate">{{ r.main_name }}</div>
+                                            <div class="small text-muted text-truncate">
+                                                {{ r.corp_name }}{% if r.alliance_name %} · {{ r.alliance_name }}{% endif %}
+                                                {% if r.n_chars > 1 %}
+                                                    <span class="badge bg-dark ms-1"
+                                                          title="{% translate 'Gekoppelde characters op dit account' %}">{{ r.n_chars }}×</span>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="small text-nowrap">
+                                    {{ r.since|naturaltime }}
+                                    {% if r.state %}<div class="text-muted">{{ r.state }}</div>{% endif %}
+                                </td>
+                                {% for cell in r.cells %}
+                                    <td class="text-center">
+                                        {% if not cell %}
+                                            <span class="cs-onb-na" title="{% translate 'Niet van toepassing' %}">·</span>
+                                        {% elif cell.done is None %}
+                                            <span class="cs-onb-na" title="{{ cell.label }} — {{ cell.note }}">–</span>
+                                        {% elif cell.done %}
+                                            <span class="cs-onb-yes" title="{{ cell.label }} — {{ cell.note }}">✓</span>
+                                        {% else %}
+                                            <span class="cs-onb-no" title="{{ cell.label }} — {{ cell.note }}">✕</span>
+                                        {% endif %}
+                                    </td>
+                                {% endfor %}
+                                <td style="min-width:150px">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <div class="progress cs-onb-bar flex-grow-1">
+                                            <div class="progress-bar {% if r.complete %}bg-success{% elif r.pct < 50 %}bg-danger{% else %}bg-warning{% endif %}"
+                                                 style="width: {{ r.pct }}%"></div>
+                                        </div>
+                                        <span class="small text-nowrap">{{ r.done }}/{{ r.total }}</span>
+                                    </div>
+                                    {% if r.missing %}
+                                        <div class="small text-warning text-truncate" style="max-width:220px"
+                                             title="{{ r.missing|join:', ' }}">
+                                            {{ r.missing|join:", " }}
+                                        </div>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <p class="small text-muted mt-2 mb-0">
+            {% blocktranslate trimmed %}
+                Elke kolom is één stap; beweeg over een vinkje voor de details. Een “–” betekent
+                dat de stap niet te controleren is (service of plugin niet geïnstalleerd) en telt
+                niet mee in de voortgang. De gegevens zijn maximaal 10 minuten oud.
+            {% endblocktranslate %}
+        </p>
+    {% endif %}
+{% endblock %}

@@ -6,6 +6,11 @@
         </a>
     </li>
     <li class="nav-item">
+        <a class="nav-link {% if active_tab == 'onboarding' %}active{% endif %}" href="{% url 'characterscan:onboarding_status' %}">
+            ✅ {% translate "Onboarding" %}
+        </a>
+    </li>
+    <li class="nav-item">
         <a class="nav-link {% if active_tab == 'log' %}active{% endif %}" href="{% url 'characterscan:activity_log' %}">
             📝 {% translate "Log & notities" %}
         </a>

@@ -356,3 +356,27 @@
 .cs-app .cs-main-badge.cs-main-sm.cs-main-self { padding-left: .55em; }
 .cs-app .cs-main-badge.cs-main-sm .cs-main-label { font-size: .6rem; }
 .cs-app .cs-main-badge.cs-main-sm img { width: 18px; height: 18px; }
+
+/* ── Onboarding-status ─────────────────────────────────────────────────── */
+.cs-app .cs-onb-table { font-size: .9rem; }
+.cs-app .cs-onb-table thead th {
+    font-size: .72rem; font-weight: 700; letter-spacing: .04em;
+    text-transform: uppercase; color: var(--cs-dim);
+    border-bottom: 1px solid var(--cs-border); vertical-align: bottom;
+}
+/* Kolomkoppen zijn smal: toon het icoon, en de naam alleen als er ruimte is. */
+.cs-app .cs-onb-col { width: 3.2rem; }
+.cs-app .cs-onb-ico { display: block; font-size: 1rem; }
+.cs-app .cs-onb-colname { display: none; }
+@media (min-width: 1400px) {
+    .cs-app .cs-onb-col { width: auto; }
+    .cs-app .cs-onb-colname { display: block; font-size: .62rem; }
+}
+.cs-app .cs-onb-yes { color: var(--cs-green); font-weight: 700; cursor: help; }
+.cs-app .cs-onb-no  { color: var(--cs-red);   font-weight: 700; cursor: help; }
+.cs-app .cs-onb-na  { color: var(--cs-dim);   cursor: help; }
+.cs-app .cs-onb-bar { height: 6px; background: rgba(255, 255, 255, .08); }
+.cs-app .cs-onb-table tbody tr { border-left: 3px solid transparent; }
+.cs-app .cs-onb-table tbody tr.cs-onb-ok   { border-left-color: var(--cs-green); }
+.cs-app .cs-onb-table tbody tr.cs-onb-warn { border-left-color: #f0932b; }
+.cs-app .cs-onb-table tbody tr.cs-onb-bad  { border-left-color: var(--cs-red); }

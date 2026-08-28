@@ -16,6 +16,9 @@ class SettingsAdmin(admin.ModelAdmin):
         ("Lijst-weergave", {
             "fields": ("show_actions_on_done", "wait_alert_hours"),
         }),
+        ("Onboarding-overzicht", {
+            "fields": ("onboarding_new_days", "onboarding_state", "onboarding_groups"),
+        }),
         ("Vetting-drempels", {
             "fields": ("wallet_alert_isk", "injector_alert",
                        "trusted_link_domains", "extra_enemy_ids"),

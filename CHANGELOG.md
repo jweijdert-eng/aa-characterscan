@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [In Development] - Unreleased
 
+## [1.17.0] - 2026-08-10
+
+### Added
+
+- **Onboarding-status** — nieuw tabblad (`/characterscan/onboarding/`) met per AA-account
+  één rij die laat zien of een (nieuw) lid netjes door het systeem is gekomen:
+  main character, AA-state, groepen, alle characters gekoppeld, tokens nog geldig,
+  Discord, TeamSpeak, de clone-stappen uit de Onboarding Checklist-plugin en Member Audit.
+  Filters: nieuwe leden (X dagen), onvolledig, alle accounts. Rijen worden 10 minuten
+  gecached; de Ververs-knop haalt ze opnieuw op.
+- Instellingen (admin → Character Scan → Instellingen → *Onboarding-overzicht*):
+  `onboarding_new_days`, `onboarding_state`, `onboarding_groups`.
+
+### Notes
+
+- Alle externe bronnen zijn optioneel: ontbreekt de Discord-/TeamSpeak-service, de
+  Onboarding Checklist-plugin of Member Audit, dan vervalt die kolom in plaats van te
+  klappen. Zo'n stap telt niet mee in de voortgang (weergave `–`).
+
+### Deploy
+
+- Migratie 0015; `collectstatic` (nieuwe CSS); web herstarten.
+
 ## [1.7.0] - 2026-07-13
 
 ### Added
